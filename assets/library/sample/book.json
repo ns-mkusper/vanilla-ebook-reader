@@ -1,0 +1,16 @@
+{
+  "id": "demo-sample",
+  "title": "Sample Ebook",
+  "author": "Vanilla Reader",
+  "description": "A short sample book shipped with the Vanilla ebook reader scaffold.",
+  "cover_art": "cover.png",
+  "chapters": [
+    {
+      "id": "sample-chapter-01",
+      "title": "Chapter 1",
+      "file": "sample-chapter-01.mp3",
+      "duration": 180,
+      "chapter_index": 1
+    }
+  ]
+}

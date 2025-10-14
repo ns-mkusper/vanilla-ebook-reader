@@ -1,0 +1,78 @@
+import { VerticalBox, HorizontalBox, ListView, Button } from "std-widgets.slint";
+
+export struct EbookItem {
+    title: string,
+    author: string,
+    duration: string,
+}
+
+export component MainWindow inherits Window {
+    in property <[EbookItem]> ebooks;
+    in property <string> status_text;
+    callback play_selected(index: int);
+
+    VerticalBox {
+        padding: 16px;
+        spacing: 12px;
+
+        Text {
+            text: "Vanilla Ebook Reader";
+            font-size: 24px;
+            horizontal-alignment: center;
+        }
+
+        Rectangle {
+            border-width: 1px;
+            border-color: #33000000;
+            min-height: 320px;
+
+            ListView {
+                for ebook[idx] in root.ebooks: Rectangle {
+                    background: ((idx / 2) * 2 == idx) ? #08000000 : #10FFFFFF;
+                    height: 64px;
+
+                    HorizontalBox {
+                        padding: 8px;
+                        spacing: 8px;
+
+                        Rectangle {
+                            width: 48px;
+                            height: 48px;
+                            border-radius: 6px;
+                            background: #30000000;
+                        }
+
+                        VerticalBox {
+                            Text {
+                                text: ebook.title;
+                                font-weight: 600;
+                            }
+                            Text {
+                                text: ebook.author == "" ? "Unknown Author" : ebook.author;
+                                color: #88000000;
+                            }
+                            Text {
+                                text: ebook.duration;
+                                font-size: 12px;
+                                color: #66000000;
+                            }
+                        }
+
+                        Rectangle { min-width: 0px; }
+
+                        Button {
+                            text: "Play";
+                            clicked => root.play_selected(idx);
+                        }
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: root.status_text;
+            font-size: 12px;
+            color: #66000000;
+        }
+    }
+}

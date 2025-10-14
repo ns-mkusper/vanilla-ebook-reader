@@ -1,0 +1,24 @@
+[package]
+name = "ebook-core"
+edition = "2021"
+version = "0.1.0"
+authors = ["Vanilla Ebook Contributors"]
+description = "Shared domain logic for the Vanilla ebook reader"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = ["std"]
+std = []
+android = []
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+walkdir = { workspace = true }
+uuid = { workspace = true }

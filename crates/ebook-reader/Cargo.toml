@@ -1,0 +1,40 @@
+[package]
+name = "ebook-reader"
+edition = "2021"
+version = "0.1.0"
+description = "Vanilla ebook reader GUI"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "ebook_reader"
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "ebook-reader"
+path = "src/main.rs"
+
+[features]
+default = []
+native-audio = ["rodio"]
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+ebook-core = { path = "../ebook-core" }
+parking_lot = { workspace = true }
+rodio = { workspace = true, optional = true }
+slint = { workspace = true, features = ["backend-winit", "renderer-skia"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+walkdir = { workspace = true }
+
+[build-dependencies]
+slint-build = "1"
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.13"
+jni = "0.21"
+log = "0.4"
+slint = { workspace = true, features = ["backend-android-activity-05"] }

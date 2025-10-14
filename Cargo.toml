@@ -1,0 +1,29 @@
+[workspace]
+members = [
+    "crates/ebook-core",
+    "crates/ebook-reader",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+version = "0.1.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+parking_lot = "0.12"
+rodio = { version = "0.18", default-features = false, features = ["vorbis"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+slint = { version = "1.13.1" }
+thiserror = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+walkdir = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
