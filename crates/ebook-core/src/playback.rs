@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::{error, instrument};
 
-use crate::model::Chapter;
+use crate::model::AudioChapter;
 
 const PLAYBACK_CHANNEL_BUFFER: usize = 8;
 
@@ -19,7 +19,7 @@ pub struct PlaybackState {
 
 #[derive(Debug, Default)]
 struct StateInner {
-    current_chapter: Option<Chapter>,
+    current_chapter: Option<AudioChapter>,
     is_playing: bool,
     position: Duration,
 }
@@ -40,7 +40,7 @@ impl PlaybackState {
         }
     }
 
-    fn set_chapter(&self, chapter: Option<Chapter>) {
+    fn set_chapter(&self, chapter: Option<AudioChapter>) {
         let mut inner = self.inner.write();
         inner.current_chapter = chapter;
         if inner.current_chapter.is_none() {
@@ -58,16 +58,22 @@ impl PlaybackState {
     }
 }
 
+impl Default for PlaybackState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Snapshot {
-    pub current_chapter: Option<Chapter>,
+    pub current_chapter: Option<AudioChapter>,
     pub is_playing: bool,
     pub position: Duration,
 }
 
 #[derive(Debug)]
 pub enum PlaybackCommand {
-    LoadAndPlay(Chapter),
+    LoadAndPlay(AudioChapter),
     Pause,
     Resume,
     Stop,
@@ -76,17 +82,17 @@ pub enum PlaybackCommand {
 
 #[derive(Debug)]
 pub enum PlaybackEvent {
-    ChapterStarted(Chapter),
-    ChapterComplete(Chapter),
+    ChapterStarted(AudioChapter),
+    ChapterComplete(AudioChapter),
     ChapterFailed {
-        chapter: Chapter,
+        chapter: AudioChapter,
         error: anyhow::Error,
     },
 }
 
 #[async_trait]
 pub trait AudioBackend: Send + Sync + 'static {
-    async fn load(&self, chapter: &Chapter) -> Result<()>;
+    async fn load(&self, chapter: &AudioChapter) -> Result<()>;
     async fn play(&self) -> Result<()>;
     async fn pause(&self) -> Result<()>;
     async fn stop(&self) -> Result<()>;

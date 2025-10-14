@@ -8,8 +8,8 @@ use tokio::task;
 use tracing::instrument;
 use walkdir::WalkDir;
 
-use crate::model::{Chapter, ChapterId, Ebook, EbookId};
-use crate::playback::serde_duration;
+use crate::model::{AudioChapter, ChapterId, Ebook, EbookId, TextChapter, TextContent, TextFormat};
+use crate::{playback::serde_duration, text::extract_outline_from_text};
 
 #[derive(Debug, Clone)]
 pub struct LibraryConfig {
@@ -100,7 +100,7 @@ fn read_metadata(path: &Path, book_root: &Path) -> Result<Ebook> {
         .with_context(|| format!("failed to read metadata from {}", path.display()))?;
     let parsed: MetadataFile = serde_json::from_str(&raw)
         .with_context(|| format!("failed to parse metadata from {}", path.display()))?;
-    Ok(parsed.into_ebook(book_root))
+    parsed.into_ebook(book_root)
 }
 
 #[derive(Debug, Deserialize)]
@@ -114,12 +114,14 @@ struct MetadataFile {
     description: Option<String>,
     #[serde(default)]
     cover_art: Option<String>,
+    #[serde(default, rename = "audio_chapters", alias = "chapters")]
+    audio_chapters: Vec<MetadataAudioChapter>,
     #[serde(default)]
-    chapters: Vec<MetadataChapter>,
+    text: Option<MetadataText>,
 }
 
 #[derive(Debug, Deserialize)]
-struct MetadataChapter {
+struct MetadataAudioChapter {
     #[serde(default)]
     id: Option<String>,
     title: String,
@@ -132,38 +134,100 @@ struct MetadataChapter {
     chapter_index: Option<u32>,
 }
 
+#[derive(Debug, Deserialize)]
+struct MetadataText {
+    file: String,
+    #[serde(default)]
+    format: Option<String>,
+    #[serde(default)]
+    toc: Vec<MetadataTextChapter>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MetadataTextChapter {
+    title: String,
+    #[serde(default)]
+    locator: Option<String>,
+}
+
 impl MetadataFile {
-    fn into_ebook(self, root: &Path) -> Ebook {
-        let id = self.id.map(EbookId::from_str).unwrap_or_else(EbookId::new);
-        let chapters = self
-            .chapters
+    fn into_ebook(self, root: &Path) -> Result<Ebook> {
+        let id = self.id.map(EbookId::from).unwrap_or_default();
+        let audio_chapters = self
+            .audio_chapters
             .into_iter()
             .enumerate()
             .map(|(idx, chapter)| chapter.into_chapter(root, idx))
             .collect();
-        Ebook {
+        let text_content = match self.text {
+            Some(text) => Some(text.into_text(root)?),
+            None => None,
+        };
+        Ok(Ebook {
             id,
             title: self.title,
             author: self.author,
             description: self.description,
             cover_art: self.cover_art.map(|p| root.join(p)),
-            chapters,
-        }
+            audio_chapters,
+            text_content,
+        })
     }
 }
 
-impl MetadataChapter {
-    fn into_chapter(self, root: &Path, idx: usize) -> Chapter {
-        Chapter {
-            id: self
-                .id
-                .map(ChapterId::from_str)
-                .unwrap_or_else(ChapterId::new),
+impl MetadataAudioChapter {
+    fn into_chapter(self, root: &Path, idx: usize) -> AudioChapter {
+        AudioChapter {
+            id: self.id.map(ChapterId::from).unwrap_or_default(),
             title: self.title,
             file: root.join(self.file),
             duration: self.duration,
             section: self.section,
-            chapter_index: self.chapter_index.or_else(|| Some(idx as u32)),
+            chapter_index: self.chapter_index.or(Some(idx as u32)),
+        }
+    }
+}
+
+impl MetadataText {
+    fn into_text(self, root: &Path) -> Result<TextContent> {
+        let path = root.join(&self.file);
+        let format = self
+            .format
+            .as_deref()
+            .map(TextFormat::from_extension)
+            .unwrap_or_else(|| {
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(TextFormat::from_extension)
+                    .unwrap_or(TextFormat::Unknown)
+            });
+
+        let mut chapters: Vec<TextChapter> = self
+            .toc
+            .into_iter()
+            .enumerate()
+            .map(|(idx, chapter)| chapter.into_chapter(idx))
+            .collect();
+
+        if chapters.is_empty() {
+            chapters = extract_outline_from_text(&path, &format)?;
+        }
+
+        Ok(TextContent {
+            file: path,
+            format,
+            chapters,
+        })
+    }
+}
+
+impl MetadataTextChapter {
+    fn into_chapter(self, idx: usize) -> TextChapter {
+        TextChapter {
+            id: ChapterId::new(),
+            title: self.title,
+            locator: self.locator,
+            chapter_index: Some(idx as u32),
         }
     }
 }

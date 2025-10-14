@@ -1,12 +1,9 @@
 #![cfg(target_os = "android")]
 
-use std::sync::OnceLock;
-use std::thread;
-
-use anyhow::Result;
 use jni::objects::{JClass, JObject};
 use jni::JNIEnv;
 use slint::android::{self, AndroidApp};
+use std::sync::OnceLock;
 use tracing::{error, info};
 
 use crate::app;
@@ -48,14 +45,6 @@ pub extern "system" fn Java_com_example_vanillaebookreader_ReaderBridge_launch(
     activity: JObject,
 ) {
     init_android_logging();
-
-    match android::android_activity::AndroidApp::attach(env, activity) {
-        Ok(app) => {
-            info!("attached to Android activity; spawning UI thread");
-            thread::spawn(move || run_with_app(app));
-        }
-        Err(err) => {
-            error!(?err, "failed to attach Android app from JNI");
-        }
-    }
+    info!("ReaderBridge.launch invoked; Android Activity integration not yet wired");
+    let _ = (env, activity);
 }

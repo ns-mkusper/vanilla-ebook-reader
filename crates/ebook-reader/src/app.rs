@@ -57,7 +57,16 @@ fn populate_ui(window: &MainWindow, books: &Arc<Vec<Ebook>>) {
         .map(|book| EbookItem {
             title: SharedString::from(book.title.clone()),
             author: SharedString::from(book.author.clone().unwrap_or_else(|| "Unknown".into())),
-            duration: SharedString::from(format_duration(book.total_duration())),
+            duration: SharedString::from(if book.has_audio() {
+                format_duration(book.total_audio_duration())
+            } else {
+                "—".to_string()
+            }),
+            action_label: SharedString::from(match (book.has_audio(), book.has_text()) {
+                (true, _) => "Play Audio",
+                (false, true) => "Read",
+                _ => "",
+            }),
         })
         .collect();
     let model = VecModel::from(items);
@@ -81,10 +90,15 @@ fn wire_play_handler(
         let handle = handle.clone();
         handle.spawn(async move {
             if let Some(book) = books.get(index as usize).cloned() {
-                if let Some(chapter) = book.chapters.first().cloned() {
+                if let Some(chapter) = book.audio_chapters.first().cloned() {
                     if let Err(err) = sender.send(PlaybackCommand::LoadAndPlay(chapter)).await {
                         tracing::warn!(?err, "failed to send playback command");
                     }
+                } else if book.has_text() {
+                    tracing::info!(
+                        title = book.title.as_str(),
+                        "text playback not yet implemented"
+                    );
                 }
             }
         });
@@ -163,7 +177,7 @@ async fn create_backend() -> Result<RodioBackend> {
 
 #[cfg(not(feature = "native-audio"))]
 async fn create_backend() -> Result<NullBackend> {
-    Ok(NullBackend::default())
+    Ok(NullBackend)
 }
 
 #[cfg(feature = "native-audio")]
@@ -196,7 +210,7 @@ impl RodioBackend {
 #[cfg(feature = "native-audio")]
 #[async_trait::async_trait]
 impl ebook_core::playback::AudioBackend for RodioBackend {
-    async fn load(&self, chapter: &ebook_core::Chapter) -> Result<()> {
+    async fn load(&self, chapter: &ebook_core::AudioChapter) -> Result<()> {
         let path = chapter.file.clone();
         let handle = self.handle.clone();
         let inner = self.inner.clone();
@@ -296,7 +310,7 @@ struct NullBackend;
 #[cfg(not(feature = "native-audio"))]
 #[async_trait::async_trait]
 impl ebook_core::playback::AudioBackend for NullBackend {
-    async fn load(&self, _chapter: &ebook_core::Chapter) -> Result<()> {
+    async fn load(&self, _chapter: &ebook_core::AudioChapter) -> Result<()> {
         Ok(())
     }
 

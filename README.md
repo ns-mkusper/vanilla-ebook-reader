@@ -1,61 +1,47 @@
 # Vanilla Ebook Reader
 
-A Rust-first ebook reader scaffold targeting Android first, with paths to desktop (Windows, macOS, Linux), iOS, and the web. The UI is implemented with [Slint](https://slint.dev) so one declarative view layer renders across platforms, while the core library/indexing logic lives in a reusable crate.
+Vanilla Ebook Reader is a cross-platform E-Book reader that brings together library indexing, audio playback, and a Slint-based interface. The goal is a cross-platform reader that can handle both narrated audiobooks and traditional ebooks while sharing as much UI code as possible across Android, desktop, and future targets.
 
-## Layout
+### Highlights
+- **Unified media model** – every entry can include audio chapters, rich text sources (EPUB, MOBI/PDF), or both.
+- **Slint front end** – renders a native-feeling UI on desktop today and Android via the Slint activity backend.
+- **Async playback core** – `ebook-core` exposes a clean API for queueing audio chapters and reporting progress, making it easy to swap backends.
+- **Android scaffolding** – Kotlin stubs plus a JNI bridge are ready to launch the Rust UI inside an Android app package.
 
+### Repository layout
 ```
 .
-├── Cargo.toml                # Workspace definition
-├── assets/                   # Sample metadata & placeholders
-├── android/                  # Gradle project skeleton for JNI + packaging
+├── Cargo.toml                # Workspace definition and shared deps
+├── assets/                   # Sample metadata, audio stubs, and text placeholders
+├── android/                  # Gradle project, JNI entry points, resources
 ├── crates/
-│   ├── ebook-core/           # Domain logic: library scanning, playback state, traits
-│   └── ebook-reader/         # Slint UI, audio backend, desktop & mobile entry points
-└── .github/workflows/ci.yml  # GitHub Actions pipeline
+│   ├── ebook-core/           # Library scanning, text parsing, playback state machine
+│   └── ebook-reader/         # Slint UI crate with Rodio-backed audio runtime
+└── .github/workflows/ci.yml  # Formatting, clippy, host build, android cross-check
 ```
 
-## Getting Started (Desktop)
-
-1. Install the latest stable Rust toolchain (`rustup default stable`).
-2. Fetch dependencies and ensure the workspace compiles:
-   ```bash
-   cargo check
-   ```
-3. Add your media under `assets/library/<book>/` and update `book.json` (a placeholder lives under `assets/library/sample`).
-4. Run the desktop app:
+### Quick start on desktop
+1. Install the stable Rust toolchain (`rustup default stable`).
+2. Verify dependencies: `cargo check`.
+3. Drop media into `assets/library/<title>/book.json`. The sample directory shows how to describe audio chapters and an EPUB source.
+4. Launch the reader:
    ```bash
    cargo run -p ebook-reader --features native-audio -- assets/library/sample
    ```
-   Omit `--features native-audio` if system audio headers are unavailable; the UI will still launch with the no-op backend.
+   Skip `--features native-audio` if system audio headers are missing; the UI will still load with the null backend.
 
-Environment variables:
-- `VANILLA_READER_LIBRARY_ROOT` – override the library path without providing a CLI argument.
+`VANILLA_READER_LIBRARY_ROOT` can be set to point the app at a different library path when running locally or packaging builds.
 
-## Android Notes
-
-- The Rust UI crate exports a `cdylib` so it can be loaded from the Android layer.
-- The `android/` directory ships a minimal Compose `MainActivity` stub and JNI bridge that expects a `libebook_reader.so` artefact.
+### Android build notes
+- `ebook-reader` compiles as a `cdylib`; `android/app` loads `libebook_reader.so` via `ReaderBridge`.
 - Build the shared library with `cargo ndk` (install via `cargo install cargo-ndk`):
   ```bash
   cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build --no-default-features --features native-audio
   ```
-- Open the Gradle project in Android Studio or run `./gradlew assembleDebug` inside `android/` once the NDK paths are configured (`ANDROID_HOME`, `ANDROID_NDK_HOME`).
+- Open `android/` in Android Studio or run `./gradlew assembleDebug`. The JNI shim currently boots the Slint window; extend it as you integrate lifecycle or text rendering behaviour.
 
-> The JNI surface is intentionally minimal; extend `ReaderBridge.kt` and add Rust functions mirroring the Android lifecycle as you wire up the Slint Android backend.
+### Continuous integration
+The GitHub Actions workflow runs `cargo fmt`, `cargo clippy -- -D warnings`, a host `cargo check`, and an `aarch64-linux-android` cross-check with `SLINT_NO_QT=1` to keep builds deterministic.
 
-## Continuous Integration
-
-GitHub Actions run formatting, clippy, host checks, and a cross-compilation sanity check for `aarch64-linux-android`. All jobs set `SLINT_NO_QT=1` so the Qt backend is skipped during CI.
-
-## Next Steps
-
-- Flesh out the JNI bridge (`android` → Rust) and hook into the Slint Android renderer.
-- Persist reading/listening progress and library metadata (e.g. `sled` or `sqlite` store).
-- Integrate platform media/notification controls on Android.
-- Expand the library scanner to index OPF/JSON metadata exports from ebook managers.
-- Explore web & desktop builds via WebAssembly or Tauri once the core stabilises.
-
-## License
-
+### License
 Dual-licensed under MIT or Apache-2.0.

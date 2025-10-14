@@ -7,9 +7,10 @@ description = "Shared domain logic for the Vanilla ebook reader"
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["std"]
+default = ["std", "epub" ]
 std = []
 android = []
+epub = ["dep:epub"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -22,3 +23,4 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 walkdir = { workspace = true }
 uuid = { workspace = true }
+epub = { workspace = true, optional = true }

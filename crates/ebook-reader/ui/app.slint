@@ -4,6 +4,7 @@ export struct EbookItem {
     title: string,
     author: string,
     duration: string,
+    action_label: string,
 }
 
 export component MainWindow inherits Window {
@@ -61,7 +62,8 @@ export component MainWindow inherits Window {
                         Rectangle { min-width: 0px; }
 
                         Button {
-                            text: "Play";
+                            text: ebook.action_label;
+                            enabled: ebook.action_label != "";
                             clicked => root.play_selected(idx);
                         }
                     }

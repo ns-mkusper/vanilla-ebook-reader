@@ -4,7 +4,7 @@
   "author": "Vanilla Reader",
   "description": "A short sample book shipped with the Vanilla ebook reader scaffold.",
   "cover_art": "cover.png",
-  "chapters": [
+  "audio_chapters": [
     {
       "id": "sample-chapter-01",
       "title": "Chapter 1",
@@ -12,5 +12,10 @@
       "duration": 180,
       "chapter_index": 1
     }
-  ]
+  ],
+  "text": {
+    "file": "sample-ebook.epub",
+    "format": "epub",
+    "toc": []
+  }
 }
