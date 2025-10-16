@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use ebook_core::{
     library::{LibraryConfig, LibraryLoader},
     playback::{PlaybackCommand, PlaybackController, PlaybackEvent},
+    text::{load_text_sections, TextSection},
     Ebook,
 };
 use slint::{SharedString, VecModel};
@@ -34,6 +35,13 @@ pub fn run() -> Result<()> {
         .context("failed to load ebook library")?;
 
     let books: Arc<Vec<Ebook>> = Arc::new(library.iter());
+    #[cfg(feature = "native-audio")]
+    let (controller, events, _audio_stream_guard) = runtime.block_on(async {
+        let (backend, stream) = create_backend().await?;
+        let (controller, events) = PlaybackController::new(backend);
+        Ok::<_, anyhow::Error>((controller, events, stream))
+    })?;
+    #[cfg(not(feature = "native-audio"))]
     let (controller, events) = runtime.block_on(async {
         let backend = create_backend().await?;
         Ok::<_, anyhow::Error>(PlaybackController::new(backend))
@@ -45,6 +53,7 @@ pub fn run() -> Result<()> {
     populate_ui(&window, &books);
 
     wire_play_handler(&window, &books, controller.command_sender(), handle.clone());
+    wire_read_handler(&window, &books, handle.clone());
     spawn_event_listener(window.as_weak(), events, handle);
 
     let _ = window.run();
@@ -56,17 +65,21 @@ fn populate_ui(window: &MainWindow, books: &Arc<Vec<Ebook>>) {
         .iter()
         .map(|book| EbookItem {
             title: SharedString::from(book.title.clone()),
-            author: SharedString::from(book.author.clone().unwrap_or_else(|| "Unknown".into())),
-            duration: SharedString::from(if book.has_audio() {
-                format_duration(book.total_audio_duration())
-            } else {
-                "—".to_string()
-            }),
-            action_label: SharedString::from(match (book.has_audio(), book.has_text()) {
-                (true, _) => "Play Audio",
-                (false, true) => "Read",
-                _ => "",
-            }),
+            author: SharedString::from(
+                book.author
+                    .as_deref()
+                    .map(|a| {
+                        if a.trim().is_empty() {
+                            "Unknown Author"
+                        } else {
+                            a
+                        }
+                    })
+                    .unwrap_or("Unknown Author"),
+            ),
+            detail: SharedString::from(describe_book(book)),
+            has_audio: book.has_audio(),
+            has_text: book.has_text(),
         })
         .collect();
     let model = VecModel::from(items);
@@ -83,11 +96,12 @@ fn wire_play_handler(
     let window_handle = window.as_weak();
     window.on_play_selected(move |index| {
         if let Some(window) = window_handle.upgrade() {
-            window.set_status_text(SharedString::from("Loading…"));
+            window.set_status_text(SharedString::from("Loading audio…"));
         }
         let sender = sender.clone();
         let books = Arc::clone(&books);
         let handle = handle.clone();
+        let status_handle = window_handle.clone();
         handle.spawn(async move {
             if let Some(book) = books.get(index as usize).cloned() {
                 if let Some(chapter) = book.audio_chapters.first().cloned() {
@@ -95,10 +109,62 @@ fn wire_play_handler(
                         tracing::warn!(?err, "failed to send playback command");
                     }
                 } else if book.has_text() {
-                    tracing::info!(
-                        title = book.title.as_str(),
-                        "text playback not yet implemented"
+                    let message = format!(
+                        "{} has no audio tracks; try the Read option instead",
+                        book.title
                     );
+                    tracing::info!("{}", message);
+                    notify_status(status_handle.clone(), message);
+                }
+            }
+        });
+    });
+}
+
+fn wire_read_handler(window: &MainWindow, books: &Arc<Vec<Ebook>>, handle: Handle) {
+    let books = Arc::clone(books);
+    let window_handle = window.as_weak();
+    window.on_read_selected(move |index| {
+        if let Some(window) = window_handle.upgrade() {
+            window.set_status_text(SharedString::from("Opening reader…"));
+        }
+        let books = Arc::clone(&books);
+        let handle = handle.clone();
+        let window_noti = window_handle.clone();
+        handle.spawn(async move {
+            let Some(book) = books.get(index as usize).cloned() else {
+                notify_status(window_noti.clone(), "Book could not be found");
+                return;
+            };
+            let Some(text_content) = book.text_content.clone() else {
+                notify_status(
+                    window_noti.clone(),
+                    format!("{} has no readable text.", book.title),
+                );
+                return;
+            };
+
+            match tokio::task::spawn_blocking(move || load_text_sections(&text_content)).await {
+                Ok(Ok(sections)) => {
+                    let status_handle = window_noti.clone();
+                    slint::invoke_from_event_loop(move || {
+                        if let Err(err) = show_reader_window(book, sections) {
+                            if let Some(window) = status_handle.upgrade() {
+                                window.set_status_text(SharedString::from(format!(
+                                    "Failed to open reader: {err:#}"
+                                )));
+                            }
+                        } else if let Some(window) = status_handle.upgrade() {
+                            window.set_status_text(SharedString::from("Ready"));
+                        }
+                    })
+                    .ok();
+                }
+                Ok(Err(err)) => {
+                    notify_status(window_noti, format!("Failed to load text: {err:#}"));
+                }
+                Err(err) => {
+                    notify_status(window_noti, format!("Failed to load text: {err}"));
                 }
             }
         });
@@ -138,6 +204,67 @@ fn spawn_event_listener(
     });
 }
 
+fn notify_status(handle: slint::Weak<MainWindow>, message: impl Into<String>) {
+    let text = SharedString::from(message.into());
+    slint::invoke_from_event_loop(move || {
+        if let Some(window) = handle.upgrade() {
+            window.set_status_text(text.clone());
+        }
+    })
+    .ok();
+}
+
+fn show_reader_window(book: Ebook, mut sections: Vec<TextSection>) -> Result<()> {
+    if sections.is_empty() {
+        sections.push(TextSection {
+            title: "Document".to_string(),
+            body: "No readable content was found in this file.".to_string(),
+        });
+    }
+
+    let reader = ReaderWindow::new().context("failed to create reader window")?;
+    reader.set_book_title(SharedString::from(book.title.clone()));
+
+    let chapter_items: Vec<_> = sections
+        .iter()
+        .map(|section| ReaderChapter {
+            title: SharedString::from(section.title.clone()),
+        })
+        .collect();
+    let chapters_model = Rc::new(VecModel::from(chapter_items));
+    reader.set_chapters(chapters_model.clone().into());
+    let _ = reader.set_selected_index(0);
+
+    let sections = Rc::new(sections);
+    if let Some(first) = sections.get(0) {
+        reader.set_chapter_title(SharedString::from(first.title.clone()));
+        reader.set_content(SharedString::from(first.body.clone()));
+    }
+
+    let reader_weak = reader.as_weak();
+    let sections_for_callback = Rc::clone(&sections);
+    reader.on_chapter_selected(move |idx| {
+        if let (Some(section), Some(window)) = (
+            sections_for_callback.get(idx as usize),
+            reader_weak.upgrade(),
+        ) {
+            let _ = window.set_selected_index(idx);
+            window.set_chapter_title(SharedString::from(section.title.clone()));
+            window.set_content(SharedString::from(section.body.clone()));
+        }
+    });
+
+    let reader_weak = reader.as_weak();
+    reader.on_request_close(move || {
+        if let Some(window) = reader_weak.upgrade() {
+            let _ = window.hide();
+        }
+    });
+
+    reader.show()?;
+    Ok(())
+}
+
 fn detect_library_root() -> PathBuf {
     if let Ok(env) = std::env::var("VANILLA_READER_LIBRARY_ROOT") {
         return PathBuf::from(env);
@@ -170,8 +297,31 @@ fn format_duration(duration: Duration) -> String {
     }
 }
 
+fn describe_book(book: &Ebook) -> String {
+    match (book.has_audio(), book.has_text()) {
+        (true, true) => {
+            let total = book.total_audio_duration();
+            if total == Duration::ZERO {
+                "Audio • Text".to_string()
+            } else {
+                format!("Audio • {} • Text", format_duration(total))
+            }
+        }
+        (true, false) => {
+            let total = book.total_audio_duration();
+            if total == Duration::ZERO {
+                "Audio".to_string()
+            } else {
+                format!("Audio • {}", format_duration(total))
+            }
+        }
+        (false, true) => "Text".to_string(),
+        _ => "Uncategorized".to_string(),
+    }
+}
+
 #[cfg(feature = "native-audio")]
-async fn create_backend() -> Result<RodioBackend> {
+async fn create_backend() -> Result<(RodioBackend, rodio::OutputStream)> {
     RodioBackend::new().context("failed to initialize audio backend")
 }
 
@@ -181,11 +331,19 @@ async fn create_backend() -> Result<NullBackend> {
 }
 
 #[cfg(feature = "native-audio")]
-#[derive(Clone)]
 struct RodioBackend {
-    _stream: rodio::OutputStream,
     handle: rodio::OutputStreamHandle,
     inner: Arc<parking_lot::Mutex<Option<RodioState>>>,
+}
+
+#[cfg(feature = "native-audio")]
+impl Clone for RodioBackend {
+    fn clone(&self) -> Self {
+        Self {
+            handle: self.handle.clone(),
+            inner: Arc::clone(&self.inner),
+        }
+    }
 }
 
 #[cfg(feature = "native-audio")]
@@ -197,13 +355,15 @@ struct RodioState {
 
 #[cfg(feature = "native-audio")]
 impl RodioBackend {
-    fn new() -> Result<Self> {
+    fn new() -> Result<(Self, rodio::OutputStream)> {
         let (stream, handle) = rodio::OutputStream::try_default()?;
-        Ok(Self {
-            _stream: stream,
-            handle,
-            inner: Arc::new(parking_lot::Mutex::new(None)),
-        })
+        Ok((
+            Self {
+                handle,
+                inner: Arc::new(parking_lot::Mutex::new(None)),
+            },
+            stream,
+        ))
     }
 }
 

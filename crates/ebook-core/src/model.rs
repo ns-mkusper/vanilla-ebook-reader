@@ -164,6 +164,12 @@ pub enum TextFormat {
     Mobi,
     #[serde(rename = "pdf")]
     Pdf,
+    #[serde(rename = "txt")]
+    PlainText,
+    #[serde(rename = "html")]
+    Html,
+    #[serde(rename = "md")]
+    Markdown,
     #[serde(other)]
     Unknown,
 }
@@ -174,6 +180,9 @@ impl TextFormat {
             "epub" => Self::Epub,
             "mobi" | "azw" | "azw3" => Self::Mobi,
             "pdf" => Self::Pdf,
+            "txt" => Self::PlainText,
+            "htm" | "html" => Self::Html,
+            "md" | "markdown" => Self::Markdown,
             _ => Self::Unknown,
         }
     }

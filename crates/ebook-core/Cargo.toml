@@ -24,3 +24,6 @@ tracing = { workspace = true }
 walkdir = { workspace = true }
 uuid = { workspace = true }
 epub = { workspace = true, optional = true }
+html2text = { workspace = true }
+mobi = { workspace = true }
+pdf-extract = { workspace = true }

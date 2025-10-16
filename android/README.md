@@ -10,7 +10,7 @@ This directory contains placeholders for building the Vanilla Ebook Reader on An
    cargo install cargo-ndk
    cargo install just # optional helper
    ```
-3. Build the Rust shared library for the desired ABI:
+3. Build the Rust shared library for the desired ABI (include `--features native-audio` to pull in the Rodio/CPAL backend):
    ```bash
    cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build --no-default-features --features native-audio
    ```

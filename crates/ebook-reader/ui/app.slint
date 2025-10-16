@@ -1,16 +1,22 @@
-import { VerticalBox, HorizontalBox, ListView, Button } from "std-widgets.slint";
+import { VerticalBox, HorizontalBox, ListView, Button, TextEdit } from "std-widgets.slint";
 
 export struct EbookItem {
     title: string,
     author: string,
-    duration: string,
-    action_label: string,
+    detail: string,
+    has_audio: bool,
+    has_text: bool,
+}
+
+export struct ReaderChapter {
+    title: string,
 }
 
 export component MainWindow inherits Window {
     in property <[EbookItem]> ebooks;
     in property <string> status_text;
     callback play_selected(index: int);
+    callback read_selected(index: int);
 
     VerticalBox {
         padding: 16px;
@@ -53,7 +59,7 @@ export component MainWindow inherits Window {
                                 color: #88000000;
                             }
                             Text {
-                                text: ebook.duration;
+                                text: ebook.detail;
                                 font-size: 12px;
                                 color: #66000000;
                             }
@@ -61,10 +67,21 @@ export component MainWindow inherits Window {
 
                         Rectangle { min-width: 0px; }
 
-                        Button {
-                            text: ebook.action_label;
-                            enabled: ebook.action_label != "";
-                            clicked => root.play_selected(idx);
+                        HorizontalBox {
+                            spacing: 8px;
+
+                            Button {
+                                text: "Read";
+                                enabled: ebook.has_text;
+                                visible: ebook.has_text;
+                                clicked => root.read_selected(idx);
+                            }
+                            Button {
+                                text: "Play";
+                                enabled: ebook.has_audio;
+                                visible: ebook.has_audio;
+                                clicked => root.play_selected(idx);
+                            }
                         }
                     }
                 }
@@ -75,6 +92,102 @@ export component MainWindow inherits Window {
             text: root.status_text;
             font-size: 12px;
             color: #66000000;
+        }
+    }
+}
+
+export component ReaderWindow inherits Window {
+    in property <string> book_title;
+    in property <[ReaderChapter]> chapters;
+    in property <int> selected_index;
+    in property <string> chapter_title;
+    in property <string> content;
+    callback chapter_selected(index: int);
+    callback request_close();
+
+    width: 900px;
+    height: 640px;
+
+    VerticalBox {
+        padding: 16px;
+        spacing: 12px;
+
+        Text {
+            text: root.book_title;
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        HorizontalBox {
+            spacing: 12px;
+
+            Rectangle {
+                width: 220px;
+                border-width: 1px;
+                border-color: #30000000;
+
+                ListView {
+                    for chapter[idx] in root.chapters: TouchArea {
+                        height: 40px;
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: {
+                                if (idx == root.selected_index) {
+                                    #20607D8B
+                                } else {
+                                    #00000000
+                                }
+                            };
+
+                            Text {
+                                text: chapter.title;
+                                x: 8px;
+                                vertical-alignment: center;
+                                color: {
+                                    if (idx == root.selected_index) {
+                                        #FFFFFF
+                                    } else {
+                                        #DD000000
+                                    }
+                                };
+                            }
+                        }
+                        clicked => root.chapter_selected(idx);
+                    }
+                }
+            }
+
+            Rectangle {
+                border-width: 1px;
+                border-color: #30000000;
+                horizontal-stretch: 1.0;
+
+                VerticalBox {
+                    padding: 12px;
+                    spacing: 8px;
+
+                    Text {
+                        text: root.chapter_title;
+                        font-size: 18px;
+                        font-weight: 600;
+                    }
+
+                    TextEdit {
+                        text: root.content;
+                        read-only: true;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+
+        HorizontalBox {
+            alignment: end;
+            Button {
+                text: "Close";
+                clicked => root.request_close();
+            }
         }
     }
 }

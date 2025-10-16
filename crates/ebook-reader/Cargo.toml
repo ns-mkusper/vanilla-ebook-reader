@@ -29,6 +29,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 walkdir = { workspace = true }
+once_cell = { workspace = true }
 
 [build-dependencies]
 slint-build = "1"
