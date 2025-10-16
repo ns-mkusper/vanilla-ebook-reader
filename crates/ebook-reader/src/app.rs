@@ -174,6 +174,7 @@ fn wire_read_handler(window: &MainWindow, books: &Arc<Vec<Ebook>>, handle: Handl
     let books = Arc::clone(books);
     let window_handle = window.as_weak();
     window.on_read_selected(move |index| {
+        tracing::debug!(%index, "read button clicked");
         if let Some(window) = window_handle.upgrade() {
             window.set_status_text(SharedString::from("Opening reader…"));
         }
@@ -182,10 +183,12 @@ fn wire_read_handler(window: &MainWindow, books: &Arc<Vec<Ebook>>, handle: Handl
         let window_noti = window_handle.clone();
         handle.spawn(async move {
             let Some(book) = books.get(index as usize).cloned() else {
+                tracing::warn!(%index, "read click referenced missing book");
                 notify_status(window_noti.clone(), "Book could not be found");
                 return;
             };
             let Some(text_content) = book.text_content.clone() else {
+                tracing::warn!(book_title = %book.title, "book has no text content for reader");
                 notify_status(
                     window_noti.clone(),
                     format!("{} has no readable text.", book.title),
@@ -195,10 +198,12 @@ fn wire_read_handler(window: &MainWindow, books: &Arc<Vec<Ebook>>, handle: Handl
 
             match tokio::task::spawn_blocking(move || load_text_sections(&text_content)).await {
                 Ok(Ok(sections)) => {
+                    tracing::debug!(book_title = %book.title, sections = sections.len(), "loaded text sections");
                     let status_handle = window_noti.clone();
                     slint::invoke_from_event_loop(move || {
                         if let Err(err) = show_reader_window(book, sections) {
                             if let Some(window) = status_handle.upgrade() {
+                                tracing::error!(?err, "failed to open reader window");
                                 window.set_status_text(SharedString::from(format!(
                                     "Failed to open reader: {err:#}"
                                 )));
@@ -210,9 +215,11 @@ fn wire_read_handler(window: &MainWindow, books: &Arc<Vec<Ebook>>, handle: Handl
                     .ok();
                 }
                 Ok(Err(err)) => {
+                    tracing::error!(?err, "loading text sections failed");
                     notify_status(window_noti, format!("Failed to load text: {err:#}"));
                 }
                 Err(err) => {
+                    tracing::error!(?err, "spawn blocking for text load failed");
                     notify_status(window_noti, format!("Failed to load text: {err}"));
                 }
             }

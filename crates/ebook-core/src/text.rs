@@ -156,12 +156,14 @@ fn load_epub_sections(content: &TextContent) -> Result<Vec<TextSection>> {
     let mut sections = Vec::new();
     for index in 0..doc.get_num_pages() {
         doc.set_current_page(index)?;
-        let html = doc
-            .get_current_str()
-            .with_context(|| format!("failed to read epub section {}", index))?;
-        let path = doc
-            .get_current_path()
-            .with_context(|| "failed to resolve epub resource path")?;
+        let current_id = doc
+            .get_current_id()
+            .with_context(|| format!("failed to resolve epub section id at index {index}"))?;
+        let (path, _) = doc
+            .resources
+            .get(&current_id)
+            .cloned()
+            .unwrap_or_else(|| (Path::new(&current_id).to_path_buf(), String::new()));
         let key = normalize_locator(path.to_string_lossy());
 
         let title = chapter_locator_map
@@ -170,7 +172,10 @@ fn load_epub_sections(content: &TextContent) -> Result<Vec<TextSection>> {
             .or_else(|| toc_map.get(&key).cloned())
             .unwrap_or_else(|| fallback_chapter_title(index));
 
-        let text = from_read(html.as_bytes(), 80)
+        let html_bytes = doc
+            .get_resource(&current_id)
+            .with_context(|| format!("failed to read epub section {}", index))?;
+        let text = from_read(html_bytes.as_slice(), 80)
             .map_err(|err| anyhow!("failed to render EPUB section: {err}"))?;
         sections.push(TextSection {
             title,
