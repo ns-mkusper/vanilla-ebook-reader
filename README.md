@@ -5,6 +5,7 @@ Vanilla Ebook Reader is a cross-platform reading app that keeps your audiobooks 
 ## What you can do
 - **Mix formats in one shelf**: drop folders of MP3, WAV, EPUB, MOBI, PDF, Markdown, or plain text and the library indexes them automatically—no JSON metadata required.
 - **Open text instantly**: the built-in reader renders EPUB/MOBI chapters, extracts PDF pages, and prettifies HTML or Markdown so you can read even when there’s no audio track.
+- **Hear and follow along**: prototype TTS playback highlights the active sentence and word while it reads, keeping your place even when you switch from audio to text.
 - **Listen your way**: enjoy gapless playback, remembered speed settings, and quick chapter scrubbing for any folder of chaptered audio.
 - **Stay perfectly in sync**: progress updates flow between text and audio, so you can swap devices or switch modes mid-chapter.
 - **Take it everywhere**: the same UI runs on desktop today and is ready for Android builds, keeping features consistent across platforms.

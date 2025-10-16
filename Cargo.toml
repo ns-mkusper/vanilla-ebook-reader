@@ -31,4 +31,6 @@ epub = "1"
 html2text = "0.15"
 mobi = "0.8"
 pdf-extract = "0.10"
-once_cell = "1.19"
+unicode-segmentation = "1.11"
+rusqlite = { version = "0.31", features = ["bundled"] }
+dirs-next = "2"

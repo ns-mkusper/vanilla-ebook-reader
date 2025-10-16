@@ -1,23 +1,72 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg(feature = "native-audio")]
-use std::time::Instant;
+use std::sync::atomic::AtomicBool;
+#[cfg(feature = "native-audio")]
+use std::thread;
 
+#[cfg(feature = "native-audio")]
+use anyhow::anyhow;
 use anyhow::{Context, Result};
 use ebook_core::{
     library::{LibraryConfig, LibraryLoader},
     playback::{PlaybackCommand, PlaybackController, PlaybackEvent},
+    sentence_segments,
     text::{load_text_sections, TextSection},
-    Ebook,
+    Ebook, EbookId,
 };
+
+use crate::persistence::{load_progress, save_progress};
+
+#[cfg(feature = "native-audio")]
+use rodio::source::{SineWave, Source};
+#[cfg(feature = "native-audio")]
+use rodio::{OutputStream, Sink};
+#[cfg(feature = "native-audio")]
+use std::time::Instant;
+
 use slint::{SharedString, VecModel};
 use tokio::runtime::{Handle, Runtime};
 use tokio::sync::mpsc::Receiver;
 
 slint::include_modules!();
+
+static SESSION_COUNTER: AtomicUsize = AtomicUsize::new(1);
+
+thread_local! {
+    static READER_SESSIONS: RefCell<HashMap<usize, ReaderSession>> = RefCell::new(HashMap::new());
+    static ACTIVE_WINDOWS: RefCell<HashMap<usize, ReaderWindow>> = RefCell::new(HashMap::new());
+}
+
+#[derive(Clone)]
+struct SentenceData {
+    text: String,
+    words: Vec<String>,
+}
+
+struct ReaderSession {
+    book_id: EbookId,
+    sections: Vec<TextSection>,
+    current_chapter: usize,
+    window: slint::Weak<ReaderWindow>,
+    sentences: Vec<SentenceData>,
+    current_sentence: usize,
+    current_word: usize,
+    #[cfg(feature = "native-audio")]
+    tts: Option<TtsPlayback>,
+}
+
+#[cfg(feature = "native-audio")]
+struct TtsPlayback {
+    cancel: Arc<AtomicBool>,
+    finished: Arc<AtomicBool>,
+}
 
 pub fn run() -> Result<()> {
     setup_tracing()?;
@@ -231,37 +280,161 @@ fn show_reader_window(book: Ebook, mut sections: Vec<TextSection>) -> Result<()>
             title: SharedString::from(section.title.clone()),
         })
         .collect();
-    let chapters_model = Rc::new(VecModel::from(chapter_items));
-    reader.set_chapters(chapters_model.clone().into());
-    let _ = reader.set_selected_index(0);
+    reader.set_chapters(Rc::new(VecModel::from(chapter_items)).into());
 
-    let sections = Rc::new(sections);
-    if let Some(first) = sections.get(0) {
-        reader.set_chapter_title(SharedString::from(first.title.clone()));
-        reader.set_content(SharedString::from(first.body.clone()));
+    let session_id = SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+    let session = ReaderSession {
+        book_id: book.id.clone(),
+        sections: sections.clone(),
+        current_chapter: 0,
+        window: reader.as_weak(),
+        sentences: Vec::new(),
+        current_sentence: 0,
+        current_word: 0,
+        #[cfg(feature = "native-audio")]
+        tts: None,
+    };
+
+    READER_SESSIONS.with(|map| {
+        map.borrow_mut().insert(session_id, session);
+    });
+
+    change_chapter(session_id, 0, false)?;
+
+    if let Some((saved_sentence, saved_word)) = load_progress(&book.id).ok().flatten() {
+        let _ = set_sentence(session_id, saved_sentence, saved_word, false);
     }
 
     let reader_weak = reader.as_weak();
-    let sections_for_callback = Rc::clone(&sections);
     reader.on_chapter_selected(move |idx| {
-        if let (Some(section), Some(window)) = (
-            sections_for_callback.get(idx as usize),
-            reader_weak.upgrade(),
-        ) {
+        #[cfg(feature = "native-audio")]
+        {
+            if let Err(err) = stop_tts(session_id, false) {
+                tracing::warn!(?err, "failed to stop TTS before chapter change");
+            }
+        }
+        if let Err(err) = change_chapter(session_id, idx as usize, true) {
+            tracing::warn!(?err, "failed to change chapter");
+        }
+        if let Some(window) = reader_weak.upgrade() {
             let _ = window.set_selected_index(idx);
-            window.set_chapter_title(SharedString::from(section.title.clone()));
-            window.set_content(SharedString::from(section.body.clone()));
         }
     });
 
     let reader_weak = reader.as_weak();
-    reader.on_request_close(move || {
+    reader.on_sentence_selected(move |idx| {
+        #[cfg(feature = "native-audio")]
+        {
+            if let Err(err) = stop_tts(session_id, false) {
+                tracing::warn!(?err, "failed to stop TTS before seeking sentence");
+            }
+        }
+        if let Err(err) = set_sentence(session_id, idx as usize, 0, true) {
+            tracing::warn!(?err, "failed to update sentence selection");
+        }
         if let Some(window) = reader_weak.upgrade() {
-            let _ = window.hide();
+            window.set_active_sentence_index(idx);
         }
     });
 
+    #[cfg(feature = "native-audio")]
+    {
+        let id = session_id;
+        reader.on_tts_play(move || {
+            if let Err(err) = start_tts(id) {
+                tracing::warn!(?err, "failed to start TTS");
+            }
+        });
+
+        let id = session_id;
+        reader.on_tts_pause(move || {
+            if let Err(err) = pause_tts(id) {
+                tracing::warn!(?err, "failed to pause TTS");
+            }
+        });
+
+        let id = session_id;
+        reader.on_tts_stop(move || {
+            if let Err(err) = stop_tts(id, true) {
+                tracing::warn!(?err, "failed to stop TTS");
+            }
+        });
+
+        let id = session_id;
+        reader.on_tts_forward_sentence(move || {
+            if let Err(err) = stop_tts(id, false) {
+                tracing::warn!(?err, "failed to stop TTS before sentence skip");
+            }
+            if let Err(err) = step_sentence(id, 1, true) {
+                tracing::warn!(?err, "failed to advance sentence");
+            }
+        });
+
+        let id = session_id;
+        reader.on_tts_backward_sentence(move || {
+            if let Err(err) = stop_tts(id, false) {
+                tracing::warn!(?err, "failed to stop TTS before rewinding sentence");
+            }
+            if let Err(err) = step_sentence(id, -1, true) {
+                tracing::warn!(?err, "failed to rewind sentence");
+            }
+        });
+
+        let id = session_id;
+        reader.on_tts_jump_forward(move || {
+            if let Err(err) = stop_tts(id, false) {
+                tracing::warn!(?err, "failed to stop TTS before jump");
+            }
+            if let Err(err) = jump_sentences(id, 2, true) {
+                tracing::warn!(?err, "failed to jump forward");
+            }
+        });
+
+        let id = session_id;
+        reader.on_tts_jump_backward(move || {
+            if let Err(err) = stop_tts(id, false) {
+                tracing::warn!(?err, "failed to stop TTS before jump");
+            }
+            if let Err(err) = jump_sentences(id, -2, true) {
+                tracing::warn!(?err, "failed to jump backward");
+            }
+        });
+    }
+
+    #[cfg(not(feature = "native-audio"))]
+    {
+        reader.on_tts_play(move || {
+            tracing::info!("TTS requires the native-audio feature to be enabled");
+        });
+        reader.on_tts_pause(|| {});
+        reader.on_tts_stop(|| {});
+        reader.on_tts_forward_sentence(|| {});
+        reader.on_tts_backward_sentence(|| {});
+        reader.on_tts_jump_forward(|| {});
+        reader.on_tts_jump_backward(|| {});
+    }
+
+    let close_id = session_id;
+    reader.on_request_close(move || {
+        #[cfg(feature = "native-audio")]
+        {
+            if let Err(err) = stop_tts(close_id, false) {
+                tracing::warn!(?err, "failed to stop TTS on close");
+            }
+        }
+        READER_SESSIONS.with(|map| {
+            map.borrow_mut().remove(&close_id);
+        });
+        ACTIVE_WINDOWS.with(|map| {
+            map.borrow_mut().remove(&close_id);
+        });
+    });
+
     reader.show()?;
+    ACTIVE_WINDOWS.with(|map| {
+        map.borrow_mut().insert(session_id, reader);
+    });
     Ok(())
 }
 
@@ -318,6 +491,415 @@ fn describe_book(book: &Ebook) -> String {
         (false, true) => "Text".to_string(),
         _ => "Uncategorized".to_string(),
     }
+}
+
+fn sentence_items(sentences: &[SentenceData]) -> Vec<ReaderSentence> {
+    sentences
+        .iter()
+        .map(|s| ReaderSentence {
+            text: SharedString::from(s.text.clone()),
+        })
+        .collect()
+}
+
+fn word_items(words: &[String]) -> Vec<ReaderWord> {
+    words
+        .iter()
+        .map(|w| ReaderWord {
+            text: SharedString::from(w.clone()),
+        })
+        .collect()
+}
+
+fn update_reader_view(session: &mut ReaderSession) {
+    if let Some(window) = session.window.upgrade() {
+        let sentence_model = Rc::new(VecModel::from(sentence_items(&session.sentences)));
+        window.set_sentences(sentence_model.into());
+
+        if let Some(sentence) = session.sentences.get(session.current_sentence) {
+            window.set_active_sentence_text(SharedString::from(sentence.text.clone()));
+            let word_model = Rc::new(VecModel::from(word_items(&sentence.words)));
+            window.set_active_sentence_words(word_model.into());
+            let word_count = sentence.words.len();
+            if word_count == 0 {
+                window.set_active_word_index(-1);
+                session.current_word = 0;
+            } else {
+                let clamped = session.current_word.min(word_count - 1);
+                session.current_word = clamped;
+                window.set_active_word_index(clamped as i32);
+            }
+            window.set_active_sentence_index(session.current_sentence as i32);
+        } else {
+            window.set_active_sentence_text(SharedString::from(""));
+            window.set_active_sentence_words(
+                Rc::new(VecModel::from(Vec::<ReaderWord>::new())).into(),
+            );
+            window.set_active_sentence_index(-1);
+            window.set_active_word_index(-1);
+            session.current_sentence = 0;
+            session.current_word = 0;
+        }
+    }
+}
+
+fn change_chapter(session_id: usize, chapter_idx: usize, persist: bool) -> Result<()> {
+    READER_SESSIONS.with(|sessions| {
+        let mut map = sessions.borrow_mut();
+        let session = match map.get_mut(&session_id) {
+            Some(s) => s,
+            None => return Ok(()),
+        };
+
+        if chapter_idx >= session.sections.len() {
+            return Ok(());
+        }
+
+        session.current_chapter = chapter_idx;
+        let section = &session.sections[chapter_idx];
+        if let Some(window) = session.window.upgrade() {
+            window.set_selected_index(chapter_idx as i32);
+            window.set_chapter_title(SharedString::from(section.title.clone()));
+            window.set_content(SharedString::from(section.body.clone()));
+        }
+
+        session.sentences = sentence_segments(&section.body)
+            .into_iter()
+            .map(|seg| SentenceData {
+                text: seg.text,
+                words: seg.words,
+            })
+            .collect();
+        session.current_sentence = 0;
+        session.current_word = 0;
+        update_reader_view(session);
+
+        if persist {
+            save_progress(
+                &session.book_id,
+                session.current_sentence,
+                session.current_word,
+            )?;
+        }
+
+        Ok(())
+    })
+}
+
+fn set_sentence(
+    session_id: usize,
+    sentence_idx: usize,
+    word_idx: usize,
+    persist: bool,
+) -> Result<()> {
+    READER_SESSIONS.with(|sessions| {
+        let mut map = sessions.borrow_mut();
+        let session = match map.get_mut(&session_id) {
+            Some(s) => s,
+            None => return Ok(()),
+        };
+
+        if session.sentences.is_empty() {
+            session.current_sentence = 0;
+            session.current_word = 0;
+            update_reader_view(session);
+            return Ok(());
+        }
+
+        let clamped_sentence = sentence_idx.min(session.sentences.len() - 1);
+        session.current_sentence = clamped_sentence;
+        let word_count = session.sentences[clamped_sentence].words.len();
+        session.current_word = if word_count == 0 {
+            0
+        } else {
+            word_idx.min(word_count - 1)
+        };
+
+        update_reader_view(session);
+
+        if persist {
+            save_progress(
+                &session.book_id,
+                session.current_sentence,
+                session.current_word,
+            )?;
+        }
+
+        Ok(())
+    })
+}
+
+#[cfg(feature = "native-audio")]
+fn set_active_word(session_id: usize, word_idx: usize, persist: bool) -> Result<()> {
+    READER_SESSIONS.with(|sessions| {
+        let mut map = sessions.borrow_mut();
+        let session = match map.get_mut(&session_id) {
+            Some(s) => s,
+            None => return Ok(()),
+        };
+
+        if session.sentences.is_empty() {
+            if let Some(window) = session.window.upgrade() {
+                window.set_active_word_index(-1);
+            }
+            session.current_word = 0;
+            return Ok(());
+        }
+
+        let word_count = session.sentences[session.current_sentence].words.len();
+        if let Some(window) = session.window.upgrade() {
+            if word_count == 0 {
+                window.set_active_word_index(-1);
+                session.current_word = 0;
+            } else {
+                let clamped = word_idx.min(word_count - 1);
+                session.current_word = clamped;
+                window.set_active_word_index(clamped as i32);
+            }
+        }
+
+        if persist {
+            save_progress(
+                &session.book_id,
+                session.current_sentence,
+                session.current_word,
+            )?;
+        }
+
+        Ok(())
+    })
+}
+
+#[cfg(feature = "native-audio")]
+fn step_sentence(session_id: usize, delta: isize, persist: bool) -> Result<()> {
+    let target = READER_SESSIONS.with(|sessions| {
+        let map = sessions.borrow();
+        map.get(&session_id).and_then(|session| {
+            if session.sentences.is_empty() {
+                None
+            } else {
+                let len = session.sentences.len() as isize;
+                let mut idx = session.current_sentence as isize + delta;
+                if idx < 0 {
+                    idx = 0;
+                }
+                if idx >= len {
+                    idx = len - 1;
+                }
+                Some(idx as usize)
+            }
+        })
+    });
+
+    if let Some(idx) = target {
+        set_sentence(session_id, idx, 0, persist)?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "native-audio")]
+fn jump_sentences(session_id: usize, delta_sentences: isize, persist: bool) -> Result<()> {
+    step_sentence(session_id, delta_sentences, persist)
+}
+
+#[cfg(feature = "native-audio")]
+fn start_tts(session_id: usize) -> Result<()> {
+    let (sentences, start_sentence, start_word, cancel_flag, finished_flag) = READER_SESSIONS
+        .with(|sessions| {
+            let mut map = sessions.borrow_mut();
+            let session = map
+                .get_mut(&session_id)
+                .ok_or_else(|| anyhow!("reader session is not available"))?;
+
+            if session.sentences.is_empty() {
+                return Err(anyhow!("no text available for TTS"));
+            }
+
+            if session.tts.is_some() {
+                return Err(anyhow!("TTS is already running"));
+            }
+
+            let cancel = Arc::new(AtomicBool::new(false));
+            let finished = Arc::new(AtomicBool::new(false));
+
+            session.tts = Some(TtsPlayback {
+                cancel: cancel.clone(),
+                finished: finished.clone(),
+            });
+
+            Ok((
+                session.sentences.clone(),
+                session.current_sentence,
+                session.current_word,
+                cancel,
+                finished,
+            ))
+        })?;
+
+    thread::spawn(move || {
+        run_tts_loop(
+            session_id,
+            sentences,
+            start_sentence,
+            start_word,
+            cancel_flag,
+            finished_flag,
+        );
+    });
+
+    Ok(())
+}
+
+#[cfg(feature = "native-audio")]
+fn pause_tts(session_id: usize) -> Result<()> {
+    stop_tts(session_id, false)
+}
+
+#[cfg(feature = "native-audio")]
+fn stop_tts(session_id: usize, reset_word: bool) -> Result<()> {
+    let flags = READER_SESSIONS.with(|sessions| {
+        let mut map = sessions.borrow_mut();
+        if let Some(session) = map.get_mut(&session_id) {
+            if let Some(tts) = session.tts.as_ref() {
+                Some((tts.cancel.clone(), tts.finished.clone()))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    });
+
+    if let Some((cancel, finished)) = flags {
+        cancel.store(true, Ordering::SeqCst);
+        for _ in 0..200 {
+            if finished.load(Ordering::SeqCst) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        finalize_tts(session_id);
+    }
+
+    if reset_word {
+        set_active_word(session_id, 0, true)?;
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "native-audio")]
+fn run_tts_loop(
+    session_id: usize,
+    sentences: Vec<SentenceData>,
+    start_sentence: usize,
+    start_word: usize,
+    cancel: Arc<AtomicBool>,
+    finished: Arc<AtomicBool>,
+) {
+    let (stream, handle) = match OutputStream::try_default() {
+        Ok(values) => values,
+        Err(err) => {
+            tracing::error!(?err, "failed to initialize audio output for TTS");
+            finished.store(true, Ordering::SeqCst);
+            slint::invoke_from_event_loop(move || finalize_tts(session_id)).ok();
+            return;
+        }
+    };
+
+    let sink = match Sink::try_new(&handle) {
+        Ok(sink) => sink,
+        Err(err) => {
+            tracing::error!(?err, "failed to open audio sink for TTS");
+            finished.store(true, Ordering::SeqCst);
+            slint::invoke_from_event_loop(move || finalize_tts(session_id)).ok();
+            return;
+        }
+    };
+
+    let word_duration = Duration::from_millis(400);
+    let step = Duration::from_millis(50);
+
+    'sentences: for (sentence_index, sentence) in sentences.iter().enumerate().skip(start_sentence)
+    {
+        if cancel.load(Ordering::SeqCst) {
+            break;
+        }
+
+        let _ = slint::invoke_from_event_loop(move || {
+            let _ = set_sentence(session_id, sentence_index, 0, true);
+        });
+
+        if sentence.words.is_empty() {
+            thread::sleep(word_duration);
+            continue;
+        }
+
+        let start_word_idx = if sentence_index == start_sentence {
+            start_word.min(sentence.words.len() - 1)
+        } else {
+            0
+        };
+
+        for (word_index, _) in sentence.words.iter().enumerate().skip(start_word_idx) {
+            if cancel.load(Ordering::SeqCst) {
+                break 'sentences;
+            }
+
+            let _ = slint::invoke_from_event_loop(move || {
+                let _ = set_active_word(session_id, word_index, false);
+            });
+
+            let tone = 440 + ((word_index % 5) as u32 * 40);
+            sink.append(SineWave::new(tone as f32).take_duration(word_duration));
+
+            let mut elapsed = Duration::ZERO;
+            while elapsed < word_duration {
+                if cancel.load(Ordering::SeqCst) {
+                    sink.stop();
+                    finished.store(true, Ordering::SeqCst);
+                    slint::invoke_from_event_loop(move || finalize_tts(session_id)).ok();
+                    return;
+                }
+                thread::sleep(step);
+                elapsed += step;
+            }
+        }
+    }
+
+    sink.sleep_until_end();
+    drop(sink);
+    drop(stream);
+    finished.store(true, Ordering::SeqCst);
+    slint::invoke_from_event_loop(move || finalize_tts(session_id)).ok();
+}
+
+#[cfg(feature = "native-audio")]
+fn finalize_tts(session_id: usize) {
+    READER_SESSIONS.with(|sessions| {
+        let mut map = sessions.borrow_mut();
+        if let Some(session) = map.get_mut(&session_id) {
+            session.tts = None;
+            let _ = save_progress(
+                &session.book_id,
+                session.current_sentence,
+                session.current_word,
+            );
+            if let Some(window) = session.window.upgrade() {
+                if session.sentences.is_empty() {
+                    window.set_active_word_index(-1);
+                } else {
+                    let word_count = session.sentences[session.current_sentence].words.len();
+                    if word_count == 0 {
+                        window.set_active_word_index(-1);
+                    } else {
+                        window
+                            .set_active_word_index(session.current_word.min(word_count - 1) as i32);
+                    }
+                }
+            }
+        }
+    });
 }
 
 #[cfg(feature = "native-audio")]

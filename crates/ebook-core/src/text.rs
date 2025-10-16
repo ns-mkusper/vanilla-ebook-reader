@@ -4,6 +4,7 @@ use html2text::from_read;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use unicode_segmentation::UnicodeSegmentation;
 
 #[cfg(feature = "epub")]
 use epub::doc::{EpubDoc, NavPoint};
@@ -18,6 +19,12 @@ pub struct TextSection {
 pub struct TextMetadata {
     pub title: Option<String>,
     pub author: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SentenceSegment {
+    pub text: String,
+    pub words: Vec<String>,
 }
 
 /// Attempt to derive a logical chapter outline from a textual source.
@@ -290,4 +297,61 @@ fn collect_navpoint(nav: &NavPoint, index: &mut u32, chapters: &mut Vec<TextChap
 #[cfg(not(feature = "epub"))]
 fn extract_epub_outline(_path: &Path) -> Result<Vec<TextChapter>> {
     Ok(Vec::new())
+}
+
+pub fn sentence_segments(text: &str) -> Vec<SentenceSegment> {
+    let mut segments = Vec::new();
+    let mut start = 0usize;
+    let mut iter = text.char_indices().peekable();
+
+    while let Some((idx, ch)) = iter.next() {
+        let is_terminal = matches!(ch, '.' | '!' | '?');
+        if is_terminal {
+            let mut end = idx + ch.len_utf8();
+            while let Some(&(next_idx, next_ch)) = iter.peek() {
+                if next_ch.is_whitespace() {
+                    end = next_idx + next_ch.len_utf8();
+                    iter.next();
+                } else {
+                    break;
+                }
+            }
+            if end > start {
+                let sentence = text[start..end].trim();
+                if !sentence.is_empty() {
+                    segments.push(sentence.to_string());
+                }
+            }
+            if let Some(&(next_idx, next_ch)) = iter.peek() {
+                if next_ch.is_whitespace() {
+                    start = next_idx + next_ch.len_utf8();
+                } else {
+                    start = next_idx;
+                }
+            } else {
+                start = end;
+            }
+        }
+    }
+
+    if start < text.len() {
+        let remainder = text[start..].trim();
+        if !remainder.is_empty() {
+            segments.push(remainder.to_string());
+        }
+    }
+
+    segments
+        .into_iter()
+        .map(|sentence| {
+            let words = sentence
+                .split_word_bounds()
+                .map(|word| word.to_string())
+                .collect();
+            SentenceSegment {
+                text: sentence,
+                words,
+            }
+        })
+        .collect()
 }

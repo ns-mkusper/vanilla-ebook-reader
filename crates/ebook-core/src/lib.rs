@@ -8,3 +8,4 @@ pub use model::{AudioChapter, ChapterId, Ebook, EbookId, TextChapter, TextConten
 pub use playback::{
     AudioBackend, PlaybackCommand, PlaybackController, PlaybackEvent, PlaybackState,
 };
+pub use text::{sentence_segments, SentenceSegment};

@@ -96,13 +96,34 @@ export component MainWindow inherits Window {
     }
 }
 
+export struct ReaderSentence {
+    text: string,
+}
+
+export struct ReaderWord {
+    text: string,
+}
+
 export component ReaderWindow inherits Window {
     in property <string> book_title;
     in property <[ReaderChapter]> chapters;
-    in property <int> selected_index;
+    in-out property <int> selected_index;
     in property <string> chapter_title;
     in property <string> content;
+    in property <[ReaderSentence]> sentences;
+    in-out property <int> active_sentence_index;
+    in property <[ReaderWord]> active_sentence_words;
+    in-out property <int> active_word_index;
+    in property <string> active_sentence_text;
     callback chapter_selected(index: int);
+    callback sentence_selected(index: int);
+    callback tts_play();
+    callback tts_pause();
+    callback tts_stop();
+    callback tts_backward_sentence();
+    callback tts_forward_sentence();
+    callback tts_jump_backward();
+    callback tts_jump_forward();
     callback request_close();
 
     width: 900px;
@@ -173,10 +194,74 @@ export component ReaderWindow inherits Window {
                         font-weight: 600;
                     }
 
-                    TextEdit {
-                        text: root.content;
-                        read-only: true;
-                        wrap: word-wrap;
+                    Rectangle {
+                        height: 120px;
+                        border-width: 1px;
+                        border-color: #20000000;
+
+                        ListView {
+                            for sentence[idx] in root.sentences: TouchArea {
+                                height: 36px;
+                                Rectangle {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    background: {
+                                        if (idx == root.active_sentence_index) {
+                                            #20607D8B
+                                        } else {
+                                            #00000000
+                                        }
+                                    };
+
+                                    Text {
+                                        text: sentence.text;
+                                        x: 8px;
+                                        vertical-alignment: center;
+                                        color: {
+                                            if (idx == root.active_sentence_index) {
+                                                #FFFFFF
+                                            } else {
+                                                #DD000000
+                                            }
+                                        };
+                                    }
+                                }
+                                clicked => root.sentence_selected(idx);
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        border-width: 1px;
+                        border-color: #1A000000;
+                        vertical-stretch: 1.0;
+
+                        TextEdit {
+                            text: root.content;
+                            read-only: true;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    Text {
+                        text: root.active_sentence_text;
+                        font-size: 16px;
+                        color: #33506478;
+                    }
+
+                    HorizontalBox {
+                        spacing: 4px;
+                        for word[idx] in root.active_sentence_words: Text {
+                            text: word.text;
+                            font-size: 16px;
+                            color: {
+                                if (idx == root.active_word_index) {
+                                    #FF004D9C
+                                } else {
+                                    #DD000000
+                                }
+                            };
+                        }
                     }
                 }
             }
@@ -184,6 +269,19 @@ export component ReaderWindow inherits Window {
 
         HorizontalBox {
             alignment: end;
+            spacing: 12px;
+
+            HorizontalBox {
+                spacing: 6px;
+                Button { text: "⏮ Sentence"; clicked => root.tts_backward_sentence(); }
+                Button { text: "⏪ 10s"; clicked => root.tts_jump_backward(); }
+                Button { text: "▶"; clicked => root.tts_play(); }
+                Button { text: "⏸"; clicked => root.tts_pause(); }
+                Button { text: "⏹"; clicked => root.tts_stop(); }
+                Button { text: "⏩ 10s"; clicked => root.tts_jump_forward(); }
+                Button { text: "⏭ Sentence"; clicked => root.tts_forward_sentence(); }
+            }
+
             Button {
                 text: "Close";
                 clicked => root.request_close();

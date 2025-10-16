@@ -27,3 +27,4 @@ epub = { workspace = true, optional = true }
 html2text = { workspace = true }
 mobi = { workspace = true }
 pdf-extract = { workspace = true }
+unicode-segmentation = { workspace = true }
