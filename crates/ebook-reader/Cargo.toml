@@ -16,7 +16,8 @@ path = "src/main.rs"
 
 [features]
 default = []
-native-audio = ["rodio"]
+native-audio = ["rodio", "tts-flite"]
+tts-flite = ["flite-sys"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -31,6 +32,9 @@ tracing-subscriber = { workspace = true }
 walkdir = { workspace = true }
 rusqlite = { workspace = true }
 dirs-next = { workspace = true }
+image = { workspace = true }
+flite-sys = { workspace = true, optional = true }
+once_cell = { workspace = true }
 
 [build-dependencies]
 slint-build = "1"

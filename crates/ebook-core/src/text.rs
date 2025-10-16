@@ -3,22 +3,36 @@ use anyhow::{anyhow, bail, Context, Result};
 use html2text::from_read;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use unicode_segmentation::UnicodeSegmentation;
 
 #[cfg(feature = "epub")]
 use epub::doc::{EpubDoc, NavPoint};
+#[cfg(feature = "epub")]
+use scraper::{Html, Selector};
+#[cfg(feature = "epub")]
+use base64::engine::general_purpose::STANDARD as Base64;
+#[cfg(feature = "epub")]
+use base64::Engine;
 
 #[derive(Debug, Clone)]
 pub struct TextSection {
     pub title: String,
     pub body: String,
+    pub images: Vec<TextImage>,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct TextMetadata {
     pub title: Option<String>,
     pub author: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TextImage {
+    pub data: Vec<u8>,
+    pub mime_type: String,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +88,7 @@ fn load_plain_text_sections(content: &TextContent) -> Result<Vec<TextSection>> {
     Ok(vec![TextSection {
         title,
         body: clean_text(&text),
+        images: Vec::new(),
     }])
 }
 
@@ -90,6 +105,7 @@ fn load_html_sections(content: &TextContent) -> Result<Vec<TextSection>> {
     Ok(vec![TextSection {
         title,
         body: clean_text(&body),
+        images: Vec::new(),
     }])
 }
 
@@ -103,6 +119,7 @@ fn load_pdf_sections(content: &TextContent) -> Result<Vec<TextSection>> {
             .map(|c| c.title.clone())
             .unwrap_or_else(|| "Document".to_string()),
         body: clean_text(&text),
+        images: Vec::new(),
     }])
 }
 
@@ -129,6 +146,7 @@ fn load_mobi_sections(content: &TextContent) -> Result<Vec<TextSection>> {
     Ok(vec![TextSection {
         title,
         body: clean_text(&body),
+        images: Vec::new(),
     }])
 }
 
@@ -159,11 +177,17 @@ fn load_epub_sections(content: &TextContent) -> Result<Vec<TextSection>> {
         let current_id = doc
             .get_current_id()
             .with_context(|| format!("failed to resolve epub section id at index {index}"))?;
-        let (path, _) = doc
-            .resources
-            .get(&current_id)
-            .cloned()
-            .unwrap_or_else(|| (Path::new(&current_id).to_path_buf(), String::new()));
+        let (path, _) = match doc.resources.get(&current_id) {
+            Some(entry) => entry.clone(),
+            None => {
+                tracing::warn!(
+                    ?current_id,
+                    index,
+                    "epub spine entry missing manifest resource; skipping"
+                );
+                continue;
+            }
+        };
         let key = normalize_locator(path.to_string_lossy());
 
         let title = chapter_locator_map
@@ -172,17 +196,171 @@ fn load_epub_sections(content: &TextContent) -> Result<Vec<TextSection>> {
             .or_else(|| toc_map.get(&key).cloned())
             .unwrap_or_else(|| fallback_chapter_title(index));
 
-        let html_bytes = doc
-            .get_resource(&current_id)
-            .with_context(|| format!("failed to read epub section {}", index))?;
+        let html_bytes = match doc.get_resource(&current_id) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                tracing::warn!(
+                    ?current_id,
+                    index,
+                    ?err,
+                    "failed to fetch epub section bytes; skipping"
+                );
+                continue;
+            }
+        };
+        let images = collect_epub_images(&mut doc, path.as_path(), html_bytes.as_slice());
         let text = from_read(html_bytes.as_slice(), 80)
             .map_err(|err| anyhow!("failed to render EPUB section: {err}"))?;
         sections.push(TextSection {
             title,
             body: clean_text(&text),
+            images,
         });
     }
     Ok(sections)
+}
+
+#[cfg(feature = "epub")]
+fn collect_epub_images(
+    doc: &mut EpubDoc<impl std::io::Read + std::io::Seek>,
+    base_path: &Path,
+    html_bytes: &[u8],
+) -> Vec<TextImage> {
+    let html = match std::str::from_utf8(html_bytes) {
+        Ok(text) => text.to_string(),
+        Err(_) => String::from_utf8_lossy(html_bytes).into_owned(),
+    };
+
+    let selector = match Selector::parse("img") {
+        Ok(sel) => sel,
+        Err(_) => return Vec::new(),
+    };
+
+    let document = Html::parse_document(&html);
+    let mut images = Vec::new();
+
+    for element in document.select(&selector) {
+        let node = element.value();
+        let src = match node.attr("src") {
+            Some(value) => value.trim(),
+            None => continue,
+        };
+        if src.is_empty() {
+            continue;
+        }
+
+        let alt_text = node.attr("alt").map(|alt| alt.to_string());
+
+        if src.starts_with("data:") {
+            if let Some(inline) = decode_data_uri(src, alt_text.clone()) {
+                images.push(inline);
+            }
+            continue;
+        }
+
+        let Some(locator) = resolve_epub_href(base_path, src) else {
+            tracing::warn!(%src, "unsupported EPUB image source; skipping");
+            continue;
+        };
+
+        let Some((resource_id, mime_type)) =
+            find_resource_by_locator(&doc.resources, &locator)
+        else {
+            tracing::warn!(%locator, %src, "EPUB image resource missing from manifest");
+            continue;
+        };
+
+        match doc.get_resource(&resource_id) {
+            Ok(bytes) => images.push(TextImage {
+                data: bytes,
+                mime_type,
+                description: alt_text.clone(),
+            }),
+            Err(err) => tracing::warn!(
+                %resource_id,
+                %locator,
+                ?err,
+                "failed to fetch EPUB image resource"
+            ),
+        }
+    }
+
+    images
+}
+
+#[cfg(feature = "epub")]
+fn decode_data_uri(source: &str, alt_text: Option<String>) -> Option<TextImage> {
+    let (meta, data) = source.split_once(',')?;
+    let meta = meta.trim_start_matches("data:");
+
+    let mut mime_type = "image/png";
+    let mut is_base64 = false;
+
+    for part in meta.split(';') {
+        let trimmed = part.trim();
+        if trimmed.eq_ignore_ascii_case("base64") {
+            is_base64 = true;
+        } else if trimmed.contains('/') {
+            mime_type = trimmed;
+        }
+    }
+
+    if !is_base64 {
+        return None;
+    }
+
+    let decoded = Base64.decode(data.trim()).ok()?;
+    Some(TextImage {
+        data: decoded,
+        mime_type: mime_type.to_string(),
+        description: alt_text,
+    })
+}
+
+#[cfg(feature = "epub")]
+fn resolve_epub_href(base_path: &Path, raw_src: &str) -> Option<String> {
+    let trimmed = raw_src.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("mailto:")
+    {
+        return None;
+    }
+
+    let without_fragment = trimmed.split('#').next().unwrap_or("").trim();
+    if without_fragment.is_empty() {
+        return None;
+    }
+
+    let joined = if without_fragment.starts_with('/') {
+        Path::new(without_fragment.trim_start_matches('/')).to_path_buf()
+    } else {
+        base_path
+            .parent()
+            .unwrap_or_else(|| Path::new(""))
+            .join(without_fragment)
+    };
+
+    Some(normalize_locator(joined.to_string_lossy()))
+}
+
+#[cfg(feature = "epub")]
+fn find_resource_by_locator(
+    resources: &HashMap<String, (PathBuf, String)>,
+    locator: &str,
+) -> Option<(String, String)> {
+    let normalized = normalize_locator(locator);
+    resources.iter().find_map(|(id, (path, mime))| {
+        if normalize_locator(path.to_string_lossy()) == normalized {
+            Some((id.clone(), mime.clone()))
+        } else {
+            None
+        }
+    })
 }
 
 #[cfg(not(feature = "epub"))]
@@ -249,7 +427,15 @@ fn fallback_chapter_title(index: usize) -> String {
 }
 
 fn normalize_locator<S: AsRef<str>>(locator: S) -> String {
-    locator.as_ref().trim_start_matches("./").replace('\\', "/")
+    locator
+        .as_ref()
+        .split('#')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .trim_start_matches("./")
+        .trim_start_matches('/')
+        .replace('\\', "/")
 }
 
 #[cfg(feature = "epub")]

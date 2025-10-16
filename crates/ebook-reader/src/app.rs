@@ -13,6 +13,8 @@ use std::thread;
 
 #[cfg(feature = "native-audio")]
 use anyhow::anyhow;
+#[cfg(feature = "native-audio")]
+use crate::tts::{self, SynthesisOptions};
 use anyhow::{Context, Result};
 use ebook_core::{
     library::{LibraryConfig, LibraryLoader},
@@ -25,13 +27,13 @@ use ebook_core::{
 use crate::persistence::{load_progress, save_progress};
 
 #[cfg(feature = "native-audio")]
-use rodio::source::{SineWave, Source};
+use rodio::buffer::SamplesBuffer;
 #[cfg(feature = "native-audio")]
 use rodio::{OutputStream, Sink};
 #[cfg(feature = "native-audio")]
 use std::time::Instant;
 
-use slint::{SharedString, VecModel};
+use slint::{Image, Rgba8Pixel, SharedPixelBuffer, SharedString, VecModel};
 use tokio::runtime::{Handle, Runtime};
 use tokio::sync::mpsc::Receiver;
 
@@ -43,6 +45,14 @@ thread_local! {
     static READER_SESSIONS: RefCell<HashMap<usize, ReaderSession>> = RefCell::new(HashMap::new());
     static ACTIVE_WINDOWS: RefCell<HashMap<usize, ReaderWindow>> = RefCell::new(HashMap::new());
 }
+
+const DEFAULT_TTS_RATE: f32 = 1.0;
+const TTS_MIN_RATE: f32 = 0.5;
+const TTS_MAX_RATE: f32 = 2.5;
+#[cfg(feature = "native-audio")]
+const MIN_HIGHLIGHT_STEP_MS: u64 = 15;
+#[cfg(feature = "native-audio")]
+const FALLBACK_WORD_MS: u64 = 120;
 
 #[derive(Clone)]
 struct SentenceData {
@@ -58,6 +68,11 @@ struct ReaderSession {
     sentences: Vec<SentenceData>,
     current_sentence: usize,
     current_word: usize,
+    tts_rate: f32,
+    #[cfg(feature = "native-audio")]
+    tts_engine: Option<Arc<dyn tts::SpeechEngine>>,
+    #[cfg(feature = "native-audio")]
+    tts_voice: Option<String>,
     #[cfg(feature = "native-audio")]
     tts: Option<TtsPlayback>,
 }
@@ -275,6 +290,7 @@ fn show_reader_window(book: Ebook, mut sections: Vec<TextSection>) -> Result<()>
         sections.push(TextSection {
             title: "Document".to_string(),
             body: "No readable content was found in this file.".to_string(),
+            images: Vec::new(),
         });
     }
 
@@ -291,6 +307,16 @@ fn show_reader_window(book: Ebook, mut sections: Vec<TextSection>) -> Result<()>
 
     let session_id = SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
 
+#[cfg(feature = "native-audio")]
+let engine_handle = tts::resolve_from_environment();
+#[cfg(feature = "native-audio")]
+let resolved_engine = if engine_handle.engine.id() == "null" {
+    tracing::warn!("no speech engine available; TTS playback will be disabled");
+    None
+} else {
+    Some(engine_handle.engine.clone())
+};
+
     let session = ReaderSession {
         book_id: book.id.clone(),
         sections: sections.clone(),
@@ -299,6 +325,11 @@ fn show_reader_window(book: Ebook, mut sections: Vec<TextSection>) -> Result<()>
         sentences: Vec::new(),
         current_sentence: 0,
         current_word: 0,
+        tts_rate: DEFAULT_TTS_RATE,
+        #[cfg(feature = "native-audio")]
+        tts_engine: resolved_engine,
+        #[cfg(feature = "native-audio")]
+        tts_voice: engine_handle.voice.clone(),
         #[cfg(feature = "native-audio")]
         tts: None,
     };
@@ -306,6 +337,8 @@ fn show_reader_window(book: Ebook, mut sections: Vec<TextSection>) -> Result<()>
     READER_SESSIONS.with(|map| {
         map.borrow_mut().insert(session_id, session);
     });
+
+    set_tts_rate(session_id, DEFAULT_TTS_RATE)?;
 
     change_chapter(session_id, 0, false)?;
 
@@ -342,6 +375,13 @@ fn show_reader_window(book: Ebook, mut sections: Vec<TextSection>) -> Result<()>
         }
         if let Some(window) = reader_weak.upgrade() {
             window.set_active_sentence_index(idx);
+        }
+    });
+
+    let rate_session = session_id;
+    reader.on_tts_rate_changed(move |rate| {
+        if let Err(err) = set_tts_rate(rate_session, rate) {
+            tracing::warn!(?err, "failed to update TTS rate");
         }
     });
 
@@ -423,11 +463,17 @@ fn show_reader_window(book: Ebook, mut sections: Vec<TextSection>) -> Result<()>
     }
 
     let close_id = session_id;
+    let close_window = reader.as_weak();
     reader.on_request_close(move || {
         #[cfg(feature = "native-audio")]
         {
             if let Err(err) = stop_tts(close_id, false) {
                 tracing::warn!(?err, "failed to stop TTS on close");
+            }
+        }
+        if let Some(window) = close_window.upgrade() {
+            if let Err(err) = window.hide() {
+                tracing::warn!(?err, "failed to hide reader window");
             }
         }
         READER_SESSIONS.with(|map| {
@@ -500,6 +546,66 @@ fn describe_book(book: &Ebook) -> String {
     }
 }
 
+fn format_tts_rate(rate: f32) -> SharedString {
+    SharedString::from(format!("{rate:.1}×"))
+}
+
+fn build_reader_images(section: &TextSection) -> Vec<ReaderImage> {
+    section
+        .images
+        .iter()
+        .filter_map(|image| {
+            decode_section_image(&image.data).map(|(source, width, height)| {
+                ReaderImage {
+                    source,
+                    description: SharedString::from(
+                        image.description.clone().unwrap_or_default(),
+                    ),
+                    natural_width: width,
+                    natural_height: height,
+                }
+            })
+        })
+        .collect()
+}
+
+fn decode_section_image(data: &[u8]) -> Option<(Image, f32, f32)> {
+    match image::load_from_memory(data) {
+        Ok(dynamic) => {
+            let rgba = dynamic.to_rgba8();
+            let (width, height) = rgba.dimensions();
+            if width == 0 || height == 0 {
+                return None;
+            }
+            let buffer = SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
+                rgba.as_raw(),
+                width,
+                height,
+            );
+            Some((Image::from_rgba8(buffer), width as f32, height as f32))
+        }
+        Err(err) => {
+            tracing::warn!(?err, "failed to decode embedded image");
+            None
+        }
+    }
+}
+
+fn set_tts_rate(session_id: usize, rate: f32) -> Result<()> {
+    let clamped = rate.clamp(TTS_MIN_RATE, TTS_MAX_RATE);
+    READER_SESSIONS.with(|sessions| {
+        let mut map = sessions.borrow_mut();
+        if let Some(session) = map.get_mut(&session_id) {
+            session.tts_rate = clamped;
+            if let Some(window) = session.window.upgrade() {
+                window.set_tts_rate(clamped);
+                window.set_tts_rate_label(format_tts_rate(clamped));
+            }
+        }
+        Ok(())
+    })
+}
+
 fn sentence_items(sentences: &[SentenceData]) -> Vec<ReaderSentence> {
     sentences
         .iter()
@@ -568,6 +674,8 @@ fn change_chapter(session_id: usize, chapter_idx: usize, persist: bool) -> Resul
             window.set_selected_index(chapter_idx as i32);
             window.set_chapter_title(SharedString::from(section.title.clone()));
             window.set_content(SharedString::from(section.body.clone()));
+            let image_items = Rc::new(VecModel::from(build_reader_images(section)));
+            window.set_content_images(image_items.into());
         }
 
         session.sentences = sentence_segments(&section.body)
@@ -711,37 +819,53 @@ fn jump_sentences(session_id: usize, delta_sentences: isize, persist: bool) -> R
 
 #[cfg(feature = "native-audio")]
 fn start_tts(session_id: usize) -> Result<()> {
-    let (sentences, start_sentence, start_word, cancel_flag, finished_flag) = READER_SESSIONS
-        .with(|sessions| {
-            let mut map = sessions.borrow_mut();
-            let session = map
-                .get_mut(&session_id)
-                .ok_or_else(|| anyhow!("reader session is not available"))?;
+    let (
+        sentences,
+        start_sentence,
+        start_word,
+        rate,
+        engine,
+        voice,
+        cancel_flag,
+        finished_flag,
+    ) = READER_SESSIONS.with(|sessions| {
+        let mut map = sessions.borrow_mut();
+        let session = map
+            .get_mut(&session_id)
+            .ok_or_else(|| anyhow!("reader session is not available"))?;
 
-            if session.sentences.is_empty() {
-                return Err(anyhow!("no text available for TTS"));
-            }
+        if session.sentences.is_empty() {
+            return Err(anyhow!("no text available for TTS"));
+        }
 
-            if session.tts.is_some() {
-                return Err(anyhow!("TTS is already running"));
-            }
+        if session.tts.is_some() {
+            return Err(anyhow!("TTS is already running"));
+        }
 
-            let cancel = Arc::new(AtomicBool::new(false));
-            let finished = Arc::new(AtomicBool::new(false));
+        let engine = session
+            .tts_engine
+            .clone()
+            .ok_or_else(|| anyhow!("no speech engine configured"))?;
 
-            session.tts = Some(TtsPlayback {
-                cancel: cancel.clone(),
-                finished: finished.clone(),
-            });
+        let cancel = Arc::new(AtomicBool::new(false));
+        let finished = Arc::new(AtomicBool::new(false));
 
-            Ok((
-                session.sentences.clone(),
-                session.current_sentence,
-                session.current_word,
-                cancel,
-                finished,
-            ))
-        })?;
+        session.tts = Some(TtsPlayback {
+            cancel: cancel.clone(),
+            finished: finished.clone(),
+        });
+
+        Ok((
+            session.sentences.clone(),
+            session.current_sentence,
+            session.current_word,
+            session.tts_rate,
+            engine,
+            session.tts_voice.clone(),
+            cancel,
+            finished,
+        ))
+    })?;
 
     thread::spawn(move || {
         run_tts_loop(
@@ -749,6 +873,9 @@ fn start_tts(session_id: usize) -> Result<()> {
             sentences,
             start_sentence,
             start_word,
+            engine,
+            voice,
+            rate,
             cancel_flag,
             finished_flag,
         );
@@ -801,6 +928,9 @@ fn run_tts_loop(
     sentences: Vec<SentenceData>,
     start_sentence: usize,
     start_word: usize,
+    engine: Arc<dyn tts::SpeechEngine>,
+    voice: Option<String>,
+    rate: f32,
     cancel: Arc<AtomicBool>,
     finished: Arc<AtomicBool>,
 ) {
@@ -824,11 +954,9 @@ fn run_tts_loop(
         }
     };
 
-    let word_duration = Duration::from_millis(400);
-    let step = Duration::from_millis(50);
+    let voice_ref = voice.as_deref();
 
-    'sentences: for (sentence_index, sentence) in sentences.iter().enumerate().skip(start_sentence)
-    {
+    'sentences: for (sentence_index, sentence) in sentences.iter().enumerate().skip(start_sentence) {
         if cancel.load(Ordering::SeqCst) {
             break;
         }
@@ -837,18 +965,67 @@ fn run_tts_loop(
             let _ = set_sentence(session_id, sentence_index, 0, true);
         });
 
-        if sentence.words.is_empty() {
-            thread::sleep(word_duration);
-            continue;
-        }
+        let synth_options = SynthesisOptions {
+            rate,
+            voice: voice_ref,
+        };
 
-        let start_word_idx = if sentence_index == start_sentence {
+        let audio = match engine.synthesize(&sentence.text, &synth_options) {
+            Ok(chunk) => chunk,
+            Err(err) => {
+                tracing::error!(?err, "TTS synthesis failed");
+                sink.stop();
+                break;
+            }
+        };
+
+        let channel_count = audio.channels.max(1);
+        let sample_rate = audio.sample_rate.max(1);
+        let total_samples = audio.samples.len();
+        let frames = if channel_count as usize == 0 {
+            0
+        } else {
+            total_samples / channel_count as usize
+        };
+        let sentence_secs = if sample_rate == 0 {
+            0.0
+        } else {
+            frames as f32 / sample_rate as f32
+        };
+        let audio_duration = if sentence_secs > 0.0 {
+            Duration::from_secs_f32(sentence_secs)
+        } else {
+            Duration::from_millis(FALLBACK_WORD_MS * sentence.words.len().max(1) as u64)
+        };
+
+        let buffer = SamplesBuffer::new(channel_count, sample_rate, audio.samples);
+        sink.append(buffer);
+
+        let start_word_idx = if sentence.words.is_empty() {
+            0
+        } else if sentence_index == start_sentence {
             start_word.min(sentence.words.len() - 1)
         } else {
             0
         };
 
-        for (word_index, _) in sentence.words.iter().enumerate().skip(start_word_idx) {
+        if sentence.words.is_empty() {
+            if !sleep_with_cancel(audio_duration, &cancel) {
+                sink.stop();
+                break;
+            }
+            continue;
+        }
+
+        let mut weights = compute_word_weights(&sentence.words);
+        let mut remaining_weight: usize = weights[start_word_idx..]
+            .iter()
+            .copied()
+            .sum::<usize>()
+            .max(1);
+        let mut remaining_time = audio_duration;
+
+        for word_index in start_word_idx..sentence.words.len() {
             if cancel.load(Ordering::SeqCst) {
                 break 'sentences;
             }
@@ -857,19 +1034,40 @@ fn run_tts_loop(
                 let _ = set_active_word(session_id, word_index, false);
             });
 
-            let tone = 440 + ((word_index % 5) as u32 * 40);
-            sink.append(SineWave::new(tone as f32).take_duration(word_duration));
+            let weight = weights[word_index].max(1);
+            let share = (weight as f32) / (remaining_weight as f32);
+            let mut word_duration = if sentence_secs > 0.0 {
+                Duration::from_secs_f32(sentence_secs * share)
+            } else {
+                Duration::from_millis((FALLBACK_WORD_MS as f32 * share.max(0.1)) as u64)
+            };
 
-            let mut elapsed = Duration::ZERO;
-            while elapsed < word_duration {
-                if cancel.load(Ordering::SeqCst) {
-                    sink.stop();
-                    finished.store(true, Ordering::SeqCst);
-                    slint::invoke_from_event_loop(move || finalize_tts(session_id)).ok();
-                    return;
-                }
-                thread::sleep(step);
-                elapsed += step;
+            if word_duration.is_zero() {
+                word_duration = Duration::from_millis(MIN_HIGHLIGHT_STEP_MS);
+            }
+
+            if word_duration > remaining_time {
+                word_duration = remaining_time;
+            }
+
+            if !sleep_with_cancel(word_duration, &cancel) {
+                sink.stop();
+                break 'sentences;
+            }
+
+            remaining_weight = remaining_weight.saturating_sub(weight);
+            remaining_time = remaining_time.saturating_sub(word_duration);
+        }
+
+        if cancel.load(Ordering::SeqCst) {
+            sink.stop();
+            break;
+        }
+
+        if !remaining_time.is_zero() {
+            if !sleep_with_cancel(remaining_time, &cancel) {
+                sink.stop();
+                break;
             }
         }
     }
@@ -879,6 +1077,42 @@ fn run_tts_loop(
     drop(stream);
     finished.store(true, Ordering::SeqCst);
     slint::invoke_from_event_loop(move || finalize_tts(session_id)).ok();
+}
+
+#[cfg(feature = "native-audio")]
+fn compute_word_weights(words: &[String]) -> Vec<usize> {
+    words
+        .iter()
+        .map(|w| {
+            let weight = w.chars().filter(|c| c.is_alphanumeric()).count();
+            weight.max(1)
+        })
+        .collect()
+}
+
+#[cfg(feature = "native-audio")]
+fn sleep_with_cancel(duration: Duration, cancel: &AtomicBool) -> bool {
+    if duration.is_zero() {
+        return true;
+    }
+
+    let mut elapsed = Duration::ZERO;
+    let step = Duration::from_millis(MIN_HIGHLIGHT_STEP_MS);
+
+    while elapsed < duration {
+        if cancel.load(Ordering::SeqCst) {
+            return false;
+        }
+        let remaining = duration.saturating_sub(elapsed);
+        let sleep_for = if remaining < step { remaining } else { step };
+        if sleep_for.is_zero() {
+            break;
+        }
+        thread::sleep(sleep_for);
+        elapsed += sleep_for;
+    }
+
+    true
 }
 
 #[cfg(feature = "native-audio")]

@@ -1,4 +1,55 @@
-import { VerticalBox, HorizontalBox, ListView, Button, TextEdit } from "std-widgets.slint";
+import { VerticalBox, HorizontalBox, ListView, Button, TextEdit, Slider, Palette } from "std-widgets.slint";
+
+export global Theme {
+    in-out property <ColorScheme> color_scheme <=> Palette.color-scheme;
+    property <bool> is_dark: color_scheme == ColorScheme.dark;
+
+    out property <brush> window_background: is_dark ? #111214 : #FAFAFA;
+    out property <brush> surface_background: is_dark ? #1C2024 : #FFFFFF;
+    out property <brush> raised_surface_background: is_dark ? #21262B : #F4F6F7;
+    out property <brush> panel_border: is_dark ? #333840 : #22000000;
+    out property <brush> divider: is_dark ? #262B32 : #1A000000;
+    out property <brush> primary_text: is_dark ? #F4F6F9 : #1F1F1F;
+    out property <brush> secondary_text: is_dark ? #C5CAD6 : #4A4A4A;
+    out property <brush> muted_text: is_dark ? #9FA6B8 : #666666;
+    out property <brush> accent_background: is_dark ? #2D8BD8 : #FF607D8B;
+    out property <brush> accent_foreground: #FFFFFF;
+    out property <brush> accent_text: is_dark ? #7DC5FF : #005A89;
+    out property <brush> icon_background: is_dark ? #2A3038 : #E4E8EF;
+    out property <brush> row_even_background: is_dark ? #20252B : #F3F5F7;
+    out property <brush> row_odd_background: is_dark ? #181C21 : #FFFFFF;
+}
+
+component ThemeChip inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback clicked();
+
+    border-width: 1px;
+    border-color: Theme.panel_border;
+    background: active ? Theme.accent_background : Theme.surface_background;
+    border-radius: 6px;
+    min-height: 28px;
+    min-width: 64px;
+
+    HorizontalBox {
+        padding: 6px;
+        alignment: center;
+        Text {
+            text: root.label;
+            color: active ? Theme.accent_foreground : Theme.primary_text;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-size: 12px;
+        }
+    }
+
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+        clicked => root.clicked();
+    }
+}
 
 export struct EbookItem {
     title: string,
@@ -17,25 +68,62 @@ export component MainWindow inherits Window {
     in property <string> status_text;
     callback play_selected(index: int);
     callback read_selected(index: int);
+    property <[string]> theme_labels: ["System", "Light", "Dark"];
+    property <int> theme_selection: Theme.color_scheme == ColorScheme.unknown ? 0
+        : Theme.color_scheme == ColorScheme.light ? 1
+        : 2;
+    background: Theme.window_background;
 
     VerticalBox {
         padding: 16px;
         spacing: 12px;
 
+        HorizontalBox {
+            spacing: 8px;
+
+            Text {
+                text: "Theme";
+                font-size: 12px;
+                color: Theme.secondary_text;
+                vertical-alignment: center;
+            }
+
+            HorizontalBox {
+                spacing: 6px;
+
+                for label[idx] in root.theme_labels: ThemeChip {
+                    label: label;
+                    active: idx == root.theme_selection;
+
+                    clicked => {
+                        if (idx == 0) {
+                            Theme.color_scheme = ColorScheme.unknown;
+                        } else if (idx == 1) {
+                            Theme.color_scheme = ColorScheme.light;
+                        } else {
+                            Theme.color_scheme = ColorScheme.dark;
+                        }
+                    }
+                }
+            }
+        }
+
         Text {
             text: "Vanilla Ebook Reader";
             font-size: 24px;
             horizontal-alignment: center;
+            color: Theme.primary_text;
         }
 
         Rectangle {
             border-width: 1px;
-            border-color: #33000000;
+            border-color: Theme.panel_border;
             min-height: 320px;
+            background: Theme.surface_background;
 
             ListView {
                 for ebook[idx] in root.ebooks: Rectangle {
-                    background: ((idx / 2) * 2 == idx) ? #08000000 : #10FFFFFF;
+                    background: ((idx / 2) * 2 == idx) ? Theme.row_even_background : Theme.row_odd_background;
                     height: 64px;
 
                     HorizontalBox {
@@ -46,22 +134,23 @@ export component MainWindow inherits Window {
                             width: 48px;
                             height: 48px;
                             border-radius: 6px;
-                            background: #30000000;
+                            background: Theme.icon_background;
                         }
 
                         VerticalBox {
                             Text {
                                 text: ebook.title;
                                 font-weight: 600;
+                                color: Theme.primary_text;
                             }
                             Text {
                                 text: ebook.author == "" ? "Unknown Author" : ebook.author;
-                                color: #88000000;
+                                color: Theme.secondary_text;
                             }
                             Text {
                                 text: ebook.detail;
                                 font-size: 12px;
-                                color: #66000000;
+                                color: Theme.muted_text;
                             }
                         }
 
@@ -91,7 +180,7 @@ export component MainWindow inherits Window {
         Text {
             text: root.status_text;
             font-size: 12px;
-            color: #66000000;
+            color: Theme.muted_text;
         }
     }
 }
@@ -104,17 +193,28 @@ export struct ReaderWord {
     text: string,
 }
 
+export struct ReaderImage {
+    source: image,
+    description: string,
+    natural_width: float,
+    natural_height: float,
+}
+
 export component ReaderWindow inherits Window {
     in property <string> book_title;
     in property <[ReaderChapter]> chapters;
     in-out property <int> selected_index;
     in property <string> chapter_title;
     in property <string> content;
+    in property <[ReaderImage]> content_images;
     in property <[ReaderSentence]> sentences;
     in-out property <int> active_sentence_index;
     in property <[ReaderWord]> active_sentence_words;
     in-out property <int> active_word_index;
     in property <string> active_sentence_text;
+    in-out property <float> tts_rate: 1.0;
+    in-out property <string> tts_rate_label: "1.0×";
+    callback tts_rate_changed(value: float);
     callback chapter_selected(index: int);
     callback sentence_selected(index: int);
     callback tts_play();
@@ -128,6 +228,7 @@ export component ReaderWindow inherits Window {
 
     width: 900px;
     height: 640px;
+    background: Theme.window_background;
 
     VerticalBox {
         padding: 16px;
@@ -137,6 +238,7 @@ export component ReaderWindow inherits Window {
             text: root.book_title;
             font-size: 22px;
             font-weight: 600;
+            color: Theme.primary_text;
         }
 
         HorizontalBox {
@@ -145,7 +247,8 @@ export component ReaderWindow inherits Window {
             Rectangle {
                 width: 220px;
                 border-width: 1px;
-                border-color: #30000000;
+                border-color: Theme.panel_border;
+                background: Theme.surface_background;
 
                 ListView {
                     for chapter[idx] in root.chapters: TouchArea {
@@ -155,9 +258,9 @@ export component ReaderWindow inherits Window {
                             height: parent.height;
                             background: {
                                 if (idx == root.selected_index) {
-                                    #20607D8B
+                                    Theme.accent_background
                                 } else {
-                                    #00000000
+                                    Theme.surface_background
                                 }
                             };
 
@@ -167,9 +270,9 @@ export component ReaderWindow inherits Window {
                                 vertical-alignment: center;
                                 color: {
                                     if (idx == root.selected_index) {
-                                        #FFFFFF
+                                        Theme.accent_foreground
                                     } else {
-                                        #DD000000
+                                        Theme.primary_text
                                     }
                                 };
                             }
@@ -181,8 +284,9 @@ export component ReaderWindow inherits Window {
 
             Rectangle {
                 border-width: 1px;
-                border-color: #30000000;
+                border-color: Theme.panel_border;
                 horizontal-stretch: 1.0;
+                background: Theme.surface_background;
 
                 VerticalBox {
                     padding: 12px;
@@ -192,12 +296,14 @@ export component ReaderWindow inherits Window {
                         text: root.chapter_title;
                         font-size: 18px;
                         font-weight: 600;
+                        color: Theme.primary_text;
                     }
 
                     Rectangle {
                         height: 120px;
                         border-width: 1px;
-                        border-color: #20000000;
+                        border-color: Theme.divider;
+                        background: Theme.surface_background;
 
                         ListView {
                             for sentence[idx] in root.sentences: TouchArea {
@@ -207,9 +313,9 @@ export component ReaderWindow inherits Window {
                                     height: parent.height;
                                     background: {
                                         if (idx == root.active_sentence_index) {
-                                            #20607D8B
+                                            Theme.accent_background
                                         } else {
-                                            #00000000
+                                            Theme.surface_background
                                         }
                                     };
 
@@ -219,9 +325,9 @@ export component ReaderWindow inherits Window {
                                         vertical-alignment: center;
                                         color: {
                                             if (idx == root.active_sentence_index) {
-                                                #FFFFFF
+                                                Theme.accent_foreground
                                             } else {
-                                                #DD000000
+                                                Theme.primary_text
                                             }
                                         };
                                     }
@@ -233,8 +339,9 @@ export component ReaderWindow inherits Window {
 
                     Rectangle {
                         border-width: 1px;
-                        border-color: #1A000000;
+                        border-color: Theme.divider;
                         vertical-stretch: 1.0;
+                        background: Theme.raised_surface_background;
 
                         TextEdit {
                             text: root.content;
@@ -243,10 +350,48 @@ export component ReaderWindow inherits Window {
                         }
                     }
 
+                    Rectangle {
+                        border-width: 0px;
+                        background: Theme.raised_surface_background;
+                        clip: true;
+                        visible: root.content_images.length > 0;
+                        height: root.content_images.length > 0 ? 240px : 0px;
+
+                        ListView {
+                            for media[idx] in root.content_images: VerticalBox {
+                                padding: 0px;
+                                spacing: 6px;
+                                width: parent.width;
+
+                                Image {
+                                    source: media.source;
+                                    width: parent.width;
+                                    height: {
+                                        let w = media.natural_width;
+                                        let h = media.natural_height;
+                                        if (w <= 0.0 || h <= 0.0) {
+                                            parent.width;
+                                        } else {
+                                            parent.width * (h / w);
+                                        }
+                                    };
+                                }
+
+                                Text {
+                                    text: media.description;
+                                    color: Theme.secondary_text;
+                                    font-size: 12px;
+                                    wrap: word-wrap;
+                                    visible: media.description != "";
+                                }
+                            }
+                        }
+                    }
+
                     Text {
                         text: root.active_sentence_text;
                         font-size: 16px;
-                        color: #33506478;
+                        color: Theme.secondary_text;
                     }
 
                     HorizontalBox {
@@ -256,11 +401,43 @@ export component ReaderWindow inherits Window {
                             font-size: 16px;
                             color: {
                                 if (idx == root.active_word_index) {
-                                    #FF004D9C
+                                    Theme.accent_text
                                 } else {
-                                    #DD000000
+                                    Theme.primary_text
                                 }
                             };
+                        }
+                    }
+
+                    HorizontalBox {
+                        spacing: 8px;
+                        alignment: center;
+
+                        Text {
+                            text: "TTS Speed";
+                            font-size: 12px;
+                            color: Theme.secondary_text;
+                            vertical-alignment: center;
+                        }
+
+                        Slider {
+                            minimum: 0.5;
+                            maximum: 2.5;
+                            step: 0.1;
+                            value <=> root.tts_rate;
+                            horizontal-stretch: 1.0;
+                            changed => {
+                                root.tts_rate_changed(self.value);
+                            }
+                        }
+
+                        Text {
+                            text: root.tts_rate_label;
+                            font-size: 14px;
+                            font-weight: 600;
+                            color: Theme.primary_text;
+                            min-width: 48px;
+                            horizontal-alignment: center;
                         }
                     }
                 }
