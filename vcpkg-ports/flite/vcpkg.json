@@ -1,0 +1,8 @@
+{
+  "name": "flite",
+  "version-semver": "2.2.0",
+  "description": "CMU Flite small footprint text-to-speech engine with cmu_us_kal voice",
+  "homepage": "https://github.com/festvox/flite",
+  "license": "BSD-4-Clause",
+  "supports": "windows"
+}

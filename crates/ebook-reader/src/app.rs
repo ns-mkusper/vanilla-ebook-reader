@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(feature = "native-audio")]
+use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -73,6 +75,8 @@ struct ReaderSession {
     tts_engine: Option<Arc<dyn tts::SpeechEngine>>,
     #[cfg(feature = "native-audio")]
     tts_voice: Option<String>,
+    #[cfg(feature = "native-audio")]
+    tts_rate_handle: Arc<AtomicU32>,
     #[cfg(feature = "native-audio")]
     tts: Option<TtsPlayback>,
 }
@@ -307,15 +311,18 @@ fn show_reader_window(book: Ebook, mut sections: Vec<TextSection>) -> Result<()>
 
     let session_id = SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
 
-#[cfg(feature = "native-audio")]
-let engine_handle = tts::resolve_from_environment();
-#[cfg(feature = "native-audio")]
-let resolved_engine = if engine_handle.engine.id() == "null" {
-    tracing::warn!("no speech engine available; TTS playback will be disabled");
-    None
-} else {
-    Some(engine_handle.engine.clone())
-};
+    #[cfg(feature = "native-audio")]
+    let engine_handle = tts::resolve_from_environment();
+    #[cfg(feature = "native-audio")]
+    let resolved_engine = if engine_handle.engine.id() == "null" {
+        tracing::warn!("no speech engine available; TTS playback will be disabled");
+        None
+    } else {
+        Some(engine_handle.engine.clone())
+    };
+
+    #[cfg(feature = "native-audio")]
+    let rate_handle = Arc::new(AtomicU32::new(rate_to_atomic(DEFAULT_TTS_RATE)));
 
     let session = ReaderSession {
         book_id: book.id.clone(),
@@ -330,6 +337,8 @@ let resolved_engine = if engine_handle.engine.id() == "null" {
         tts_engine: resolved_engine,
         #[cfg(feature = "native-audio")]
         tts_voice: engine_handle.voice.clone(),
+        #[cfg(feature = "native-audio")]
+        tts_rate_handle: rate_handle.clone(),
         #[cfg(feature = "native-audio")]
         tts: None,
     };
@@ -597,6 +606,12 @@ fn set_tts_rate(session_id: usize, rate: f32) -> Result<()> {
         let mut map = sessions.borrow_mut();
         if let Some(session) = map.get_mut(&session_id) {
             session.tts_rate = clamped;
+            #[cfg(feature = "native-audio")]
+            {
+                session
+                    .tts_rate_handle
+                    .store(rate_to_atomic(clamped), Ordering::SeqCst);
+            }
             if let Some(window) = session.window.upgrade() {
                 window.set_tts_rate(clamped);
                 window.set_tts_rate_label(format_tts_rate(clamped));
@@ -823,7 +838,7 @@ fn start_tts(session_id: usize) -> Result<()> {
         sentences,
         start_sentence,
         start_word,
-        rate,
+        rate_handle,
         engine,
         voice,
         cancel_flag,
@@ -859,7 +874,7 @@ fn start_tts(session_id: usize) -> Result<()> {
             session.sentences.clone(),
             session.current_sentence,
             session.current_word,
-            session.tts_rate,
+            session.tts_rate_handle.clone(),
             engine,
             session.tts_voice.clone(),
             cancel,
@@ -873,9 +888,9 @@ fn start_tts(session_id: usize) -> Result<()> {
             sentences,
             start_sentence,
             start_word,
+            rate_handle,
             engine,
             voice,
-            rate,
             cancel_flag,
             finished_flag,
         );
@@ -928,9 +943,9 @@ fn run_tts_loop(
     sentences: Vec<SentenceData>,
     start_sentence: usize,
     start_word: usize,
+    rate_handle: Arc<AtomicU32>,
     engine: Arc<dyn tts::SpeechEngine>,
     voice: Option<String>,
-    rate: f32,
     cancel: Arc<AtomicBool>,
     finished: Arc<AtomicBool>,
 ) {
@@ -965,8 +980,18 @@ fn run_tts_loop(
             let _ = set_sentence(session_id, sentence_index, 0, true);
         });
 
+        let stored_rate = {
+            let raw = rate_handle.load(Ordering::SeqCst);
+            if raw == 0 {
+                rate_to_atomic(DEFAULT_TTS_RATE)
+            } else {
+                raw
+            }
+        };
+        let current_rate = atomic_to_rate(stored_rate);
+
         let synth_options = SynthesisOptions {
-            rate,
+            rate: current_rate,
             voice: voice_ref,
         };
 
@@ -1010,14 +1035,20 @@ fn run_tts_loop(
         };
 
         if sentence.words.is_empty() {
-            if !sleep_with_cancel(audio_duration, &cancel) {
+            let wait_duration = if audio_duration.is_zero() {
+                scaled_duration(FALLBACK_WORD_MS, current_rate)
+            } else {
+                audio_duration
+            };
+
+            if !sleep_with_cancel(wait_duration, &cancel) {
                 sink.stop();
                 break;
             }
             continue;
         }
 
-        let mut weights = compute_word_weights(&sentence.words);
+        let weights = compute_word_weights(&sentence.words);
         let mut remaining_weight: usize = weights[start_word_idx..]
             .iter()
             .copied()
@@ -1039,7 +1070,8 @@ fn run_tts_loop(
             let mut word_duration = if sentence_secs > 0.0 {
                 Duration::from_secs_f32(sentence_secs * share)
             } else {
-                Duration::from_millis((FALLBACK_WORD_MS as f32 * share.max(0.1)) as u64)
+                let base = (FALLBACK_WORD_MS as f32 * share.max(0.1)).round() as u64;
+                scaled_duration(base.max(1), current_rate)
             };
 
             if word_duration.is_zero() {
@@ -1113,6 +1145,26 @@ fn sleep_with_cancel(duration: Duration, cancel: &AtomicBool) -> bool {
     }
 
     true
+}
+
+#[cfg(feature = "native-audio")]
+fn rate_to_atomic(rate: f32) -> u32 {
+    let scaled = (rate.clamp(TTS_MIN_RATE, TTS_MAX_RATE) * 1000.0).round();
+    let min_scaled = (TTS_MIN_RATE * 1000.0).round();
+    let max_scaled = (TTS_MAX_RATE * 1000.0).round();
+    scaled.clamp(min_scaled, max_scaled) as u32
+}
+
+#[cfg(feature = "native-audio")]
+fn atomic_to_rate(value: u32) -> f32 {
+    (value as f32) / 1000.0
+}
+
+#[cfg(feature = "native-audio")]
+fn scaled_duration(base_ms: u64, rate: f32) -> Duration {
+    let adjusted = if rate <= 0.05 { base_ms } else { (base_ms as f32 / rate).round() as u64 };
+    let clamped = adjusted.clamp(1, 10_000);
+    Duration::from_millis(clamped)
 }
 
 #[cfg(feature = "native-audio")]

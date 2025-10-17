@@ -38,9 +38,20 @@ once_cell = { workspace = true }
 
 [build-dependencies]
 slint-build = "1"
+vcpkg = "0.2"
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13"
 jni = "0.21"
 log = "0.4"
 slint = { workspace = true, features = ["backend-android-activity-05"] }
+
+[package.metadata.vcpkg]
+git = "https://github.com/microsoft/vcpkg"
+rev = "4334d8b4c8916018600212ab4dd4bbdc343065d1"
+dependencies = ["flite"]
+overlay-ports-path = ["../../vcpkg-ports"]
+
+[package.metadata.vcpkg.target.x86_64-pc-windows-msvc]
+triplet = "x64-windows-static-md"
+dependencies = ["flite"]
