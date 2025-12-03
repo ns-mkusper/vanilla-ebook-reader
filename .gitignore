@@ -1,0 +1,87 @@
+# OS & System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+*.swp
+
+# IDEs & Editors
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Rust (rust_core)
+# Build artifacts
+target/
+**/target/
+
+# Backup files
+**/*.rs.bk
+
+# Keep Cargo.lock (app project)
+Cargo.lock
+
+# Flutter & Dart (flutter_client)
+# Build artifacts
+build/
+**/build/
+.dart_tool/
+**/.dart_tool/
+
+# Generated config
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+
+# Android (flutter_client/android)
+**/android/gradle-wrapper.jar
+**/android/.gradle
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+/android//generated/
+/android//intermediates/
+/android//tmp/
+
+# Android Keystores
+*.jks
+*.keystore
+key.properties
+
+# iOS (flutter_client/ios)
+/ios//Flutter/Generated.xcconfig
+/ios//Flutter/app.flx
+/ios//Flutter/app.zip
+/ios//Flutter/flutter_assets/
+/ios//ServiceDefinitions.json
+*/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/DerivedData/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Profile/
+**/ios/Release/
+
+# Windows/Linux (Flutter Desktop)
+**/windows/flutter/ephemeral/
+**/linux/flutter/ephemeral/
+
+# Misc
+# Logs
+*.log
+
+# Force-add example
+!some/file/path
