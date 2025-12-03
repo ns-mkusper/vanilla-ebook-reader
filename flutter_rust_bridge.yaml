@@ -1,0 +1,16 @@
+# flutter_rust_bridge.yaml
+
+# Rust Configuration
+rust_root: rust_core
+rust_input: crate::api
+rust_output: rust_core/src/bridge_generated.rs
+rust_features:
+  - bridge
+
+# Dart Configuration
+dart_output: flutter_client/lib 
+dart_entrypoint_class_name: TtsBridge
+
+# Formatting & Checks
+dart_format: false
+deps_check: false

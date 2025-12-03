@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -10,7 +11,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::engine::{AudioFrame, EngineRegistryHandle};
+use crate::engine::{AudioFrame, EngineRegistryHandle, RegistryError, TTSEngine};
 
 #[cfg(feature = "bridge")]
 use flutter_rust_bridge::frb;
@@ -110,10 +111,11 @@ pub fn stream_audio(text: String, request: EngineRequest, sink: StreamSink<Audio
         let _ = sink.add_error(anyhow!("engine registry not initialized").to_string());
         return;
     };
-    let model_path = backend_model_path(&request.backend).to_string();
+    let backend = request.backend.clone();
+    let model_path = backend_model_path(&backend).to_string();
 
     info!(%model_path, "spawning synthesis thread");
-    thread::spawn(move || match handle.load_model(&model_path) {
+    thread::spawn(move || match resolve_engine(&handle, &backend) {
         Ok(engine) => match engine.synthesize(&text) {
             Ok(frames) => dispatch_frames(frames, sink),
             Err(err) => {
@@ -144,5 +146,25 @@ fn backend_model_path(backend: &EngineBackend) -> &str {
     match backend {
         EngineBackend::Auto { model_path } => model_path,
         EngineBackend::Piper(config) => &config.model_path,
+    }
+}
+
+fn resolve_engine(
+    handle: &EngineRegistryHandle,
+    backend: &EngineBackend,
+) -> Result<Arc<dyn TTSEngine>, RegistryError> {
+    match backend {
+        EngineBackend::Auto { model_path } => Ok(handle.mock_engine(model_path)),
+        EngineBackend::Piper(config) => {
+            #[cfg(feature = "piper")]
+            {
+                handle.load_piper(config)
+            }
+            #[cfg(not(feature = "piper"))]
+            {
+                let _ = config;
+                Err(RegistryError::PiperUnavailable)
+            }
+        }
     }
 }

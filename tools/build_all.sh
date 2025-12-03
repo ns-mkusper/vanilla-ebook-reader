@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 RUST_DIR="$ROOT_DIR/rust_core"
 FLUTTER_DIR="$ROOT_DIR/flutter_client"
+RUST_FEATURES="${RUST_FEATURES:-bridge,piper}"
+export PATH="/opt/cargo/bin:$PATH"
 
 usage() {
   cat <<USAGE
@@ -24,30 +26,35 @@ USAGE
 run_codegen() {
   echo "[build] Generating Flutter Rust Bridge bindings"
   local stub_path="$ROOT_DIR/tools/stubs"
+  local config_file="$ROOT_DIR/flutter_rust_bridge.yaml"
+  if [[ ! -f "$config_file" ]]; then
+    echo "[build] Missing flutter_rust_bridge.yaml next to tools/" >&2
+    exit 1
+  fi
+  if ! command -v flutter_rust_bridge_codegen >/dev/null 2>&1; then
+    cat <<'EOF' >&2
+[build] flutter_rust_bridge_codegen not found on PATH.
+[build] Install it via: cargo install flutter_rust_bridge_codegen --locked
+EOF
+    exit 1
+  fi
   PATH="$stub_path:$PATH" flutter_rust_bridge_codegen generate \
-    --rust-root "$RUST_DIR" \
-    --rust-input crate::api \
-    --rust-output "$RUST_DIR/src/bridge_generated.rs" \
-    --dart-output "$FLUTTER_DIR/lib" \
-    --dart-entrypoint-class-name TtsBridge \
-    --no-deps-check \
-    --no-dart-format \
-    --rust-features bridge
+    --config-file "$config_file"
 }
 
 build_rust() {
   echo "[build] Building Rust core"
-  (cd "$RUST_DIR" && cargo build)
+  (cd "$RUST_DIR" && cargo build --features "$RUST_FEATURES")
 }
 
 build_android() {
   echo "[build] Building Android shared libraries"
-  (cd "$RUST_DIR" && cargo ndk -t armeabi-v7a -t arm64-v8a -t x86_64 -o "$FLUTTER_DIR/android/app/src/main/jniLibs" build --release)
+  (cd "$RUST_DIR" && cargo ndk -t armeabi-v7a -t arm64-v8a -t x86_64 -o "$FLUTTER_DIR/android/app/src/main/jniLibs" build --release --features "$RUST_FEATURES")
 }
 
 build_ios() {
   echo "[build] Building iOS universal library"
-  (cd "$RUST_DIR" && cargo lipo --release)
+  (cd "$RUST_DIR" && cargo lipo --release --features "$RUST_FEATURES")
 }
 
 build_flutter() {

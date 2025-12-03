@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
 final audioHandlerProvider = Provider<Future<TtsAudioHandler>>((ref) async {
@@ -24,27 +25,31 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   StreamSubscription<PlaybackEvent>? _eventSub;
   MediaItem? _currentItem;
 
-  Future<void> playPcm(Uint8List pcmBytes, int sampleRate) async {
+  Future<Duration> playPcm(Uint8List pcmBytes, int sampleRate) async {
     if (pcmBytes.isEmpty || sampleRate <= 0) {
-      return;
+      return Duration.zero;
     }
 
     final wavBytes = _buildWavBytes(pcmBytes, sampleRate);
     final uri = Uri.dataFromBytes(wavBytes, mimeType: 'audio/wav');
+    final duration = Duration(
+      milliseconds: (pcmBytes.length / 2 / sampleRate * 1000).round(),
+    );
     _currentItem = MediaItem(
       id: uri.toString(),
       album: 'Generated Speech',
       title: 'TTS Playback',
-      duration: Duration(
-        milliseconds: (pcmBytes.length / 2 / sampleRate * 1000).round(),
-      ),
+      duration: duration,
     );
     mediaItem.add(_currentItem);
 
     await _player.stop();
     await _player.setAudioSource(AudioSource.uri(uri));
-    await _player.play();
+    unawaited(_player.play());
+    return duration;
   }
+
+  Stream<Duration> positionStream() => _player.positionStream;
 
   @override
   Future<void> play() => _player.play();
@@ -68,13 +73,6 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> rewind() =>
       _player.seek(_player.position - const Duration(seconds: 15));
-
-  @override
-  Future<void> close() async {
-    await _eventSub?.cancel();
-    await _player.dispose();
-    await super.close();
-  }
 
   void _broadcastState(PlaybackEvent event) {
     final playing = _player.playing;
@@ -100,7 +98,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
       case ProcessingState.idle:
         return AudioProcessingState.idle;
       case ProcessingState.loading:
-        return AudioProcessingState.connecting;
+        return AudioProcessingState.loading;
       case ProcessingState.buffering:
         return AudioProcessingState.buffering;
       case ProcessingState.ready:

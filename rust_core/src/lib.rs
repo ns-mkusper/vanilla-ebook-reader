@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "bridge", allow(unexpected_cfgs))]
+
 pub mod api;
 pub mod audio;
 #[cfg(feature = "bridge")]

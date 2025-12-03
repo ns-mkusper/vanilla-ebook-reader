@@ -20,16 +20,24 @@ thiserror = "1"
 tracing = "0.1"
 once_cell = "1"
 parking_lot = "0.12"
+piper-rs = { version = "0.1.9", optional = true }
 
 [features]
-default = ["mock_bridge"]
-piper = []
+default = ["bridge", "piper"]
+piper = ["dep:piper-rs"]
 bridge = ["flutter_rust_bridge"]
-mock_bridge = []
-flutter_rust_bridge = ["dep:flutter_rust_bridge"]
 
 [build-dependencies]
 cc = "1"
 
 [dev-dependencies]
 assert_matches = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "engine_bench"
+harness = false
+
+[patch.crates-io]
+ort = { git = "https://github.com/pykeio/ort", tag = "v2.0.0-rc.9" }
+ort-sys = { git = "https://github.com/pykeio/ort", tag = "v2.0.0-rc.9", package = "ort-sys" }

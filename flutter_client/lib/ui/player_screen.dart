@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/text_analysis.dart';
 import '../services/tts_service.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
@@ -17,13 +18,23 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   void initState() {
     super.initState();
     Future.microtask(() async {
-      await ref.read(ttsServiceProvider).speak(widget.text);
+      try {
+        await ref.read(ttsServiceProvider).speak(widget.text);
+      } catch (err) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Playback failed: $err')),
+        );
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final wordIndex = ref.watch(currentWordIndexProvider);
+    final boundaries = ref.watch(wordBoundariesProvider);
+    final effectiveBoundaries =
+        boundaries.isEmpty ? computeWordBoundaries(widget.text) : boundaries;
     return Scaffold(
       appBar: AppBar(title: const Text('Streaming Playback')),
       body: Padding(
@@ -33,7 +44,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           children: [
             const Text('Live Highlight'),
             const SizedBox(height: 12),
-            Expanded(child: _HighlightedText(text: widget.text, activeIndex: wordIndex)),
+            Expanded(
+              child: _HighlightedText(
+                text: widget.text,
+                activeIndex: wordIndex,
+                boundaries: effectiveBoundaries,
+              ),
+            ),
           ],
         ),
       ),
@@ -42,35 +59,49 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 }
 
 class _HighlightedText extends StatelessWidget {
-  const _HighlightedText({required this.text, required this.activeIndex});
+  const _HighlightedText({
+    required this.text,
+    required this.activeIndex,
+    required this.boundaries,
+  });
 
   final String text;
   final int activeIndex;
+  final List<TextWordBoundary> boundaries;
 
   @override
   Widget build(BuildContext context) {
+    if (boundaries.isEmpty) {
+      return SingleChildScrollView(
+        child: Text(text, style: Theme.of(context).textTheme.bodyLarge),
+      );
+    }
     final spans = <TextSpan>[];
-    final before = text.substring(0, activeIndex.clamp(0, text.length));
-    final active = activeIndex < text.length ? text[activeIndex] : '';
-    final after = activeIndex + 1 < text.length ? text.substring(activeIndex + 1) : '';
-
-    if (before.isNotEmpty) {
-      spans.add(TextSpan(text: before));
-    }
-    if (active.isNotEmpty) {
-      spans.add(TextSpan(
-        text: active,
-        style: TextStyle(
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          color: Theme.of(context).colorScheme.onPrimary,
-          fontWeight: FontWeight.bold,
+    var cursor = 0;
+    final theme = Theme.of(context);
+    for (final boundary in boundaries) {
+      if (boundary.start > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, boundary.start)));
+      }
+      final wordText = text.substring(boundary.start, boundary.end);
+      final isActive = boundary.index == activeIndex;
+      spans.add(
+        TextSpan(
+          text: wordText,
+          style: isActive
+              ? TextStyle(
+                  backgroundColor: theme.colorScheme.primary,
+                  color: theme.colorScheme.onPrimary,
+                  fontWeight: FontWeight.bold,
+                )
+              : null,
         ),
-      ));
+      );
+      cursor = boundary.end;
     }
-    if (after.isNotEmpty) {
-      spans.add(TextSpan(text: after));
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor)));
     }
-
     return SingleChildScrollView(
       child: RichText(
         text: TextSpan(

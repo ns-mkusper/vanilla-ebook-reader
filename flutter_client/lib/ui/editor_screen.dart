@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../genui/agent.dart';
 import '../genui/components.dart';
+import '../genui/panel.dart';
+import '../services/text_analysis.dart';
 import '../services/tts_service.dart';
 import 'player_screen.dart';
 
@@ -17,93 +18,86 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   final TextEditingController _controller = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final config = ref.watch(ttsConfigProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('TTS Beast Editor'),
         actions: [
           IconButton(
             icon: const Icon(Icons.smart_toy),
-            onPressed: () async {
-              await _showGenUiDialog();
-            },
+            onPressed: () => _showGenUiSheet(),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _controller,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                hintText: 'Type or paste text to synthesize...',
-                border: OutlineInputBorder(),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _controller,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                  hintText: 'Paste or dictate text to synthesize...',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Model: ${config.modelPath ?? 'Unset'}'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Stream to Player'),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => PlayerScreen(text: _controller.text)),
-                );
-              },
-            ),
-          ],
+              const SizedBox(height: 16),
+              const ModelSelectorCard(),
+              const SizedBox(height: 12),
+              const LlmModelDropdown(),
+              const SizedBox(height: 12),
+              const SpeedSlider(),
+              const SizedBox(height: 8),
+              const ThemeToggle(),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.graphic_eq),
+                  label: const Text('Stream to Player'),
+                  onPressed: _controller.text.trim().isEmpty
+                      ? null
+                      : () => _launchPlayer(context),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Future<void> _showGenUiDialog() async {
-    final agent = ref.read(genUiAgentProvider);
-    final config = ref.watch(ttsConfigProvider);
-    final controller = TextEditingController();
-
-    await showDialog<void>(
+  Future<void> _showGenUiSheet() async {
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('GenUI Prompt'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(hintText: 'Describe your setup...'),
-            ),
-            const SizedBox(height: 16),
-            const ModelSelectorCard(),
-            const SpeedSlider(),
-            const ThemeToggle(),
-            const SizedBox(height: 8),
-            Text('Current rate: ${config.rate.toStringAsFixed(2)}x'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              await agent.applyPrompt(controller.text);
-              if (context.mounted) {
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('Generate'),
-          ),
-        ],
+      isScrollControlled: true,
+      builder: (context) => const FractionallySizedBox(
+        heightFactor: 0.9,
+        child: GenUiPanel(),
       ),
+    );
+  }
+
+  Future<void> _launchPlayer(BuildContext context) async {
+    final text = _controller.text;
+    ref.read(wordBoundariesProvider.notifier).state =
+        computeWordBoundaries(text);
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PlayerScreen(text: text)),
     );
   }
 }

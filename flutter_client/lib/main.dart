@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:genui/genui.dart';
 import 'package:tts_flutter_client/api.dart' as bridge;
 import 'package:tts_flutter_client/frb_generated.dart';
 
@@ -11,6 +12,7 @@ import 'ui/editor_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  configureGenUiLogging();
   await _initializeRustBridge();
   runApp(const ProviderScope(child: TtsApp()));
 }

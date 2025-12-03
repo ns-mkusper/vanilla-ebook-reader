@@ -4,43 +4,98 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tts_flutter_client/api.dart' as bridge;
 
+import '../services/llm_models.dart';
+import '../services/model_repository.dart';
+import '../services/text_analysis.dart';
 import 'audio_handler.dart';
 
 final ttsConfigProvider =
     StateNotifierProvider<TtsConfigNotifier, TtsConfig>((ref) {
-  return TtsConfigNotifier(const TtsConfig());
+  return TtsConfigNotifier();
 });
 
 final currentWordIndexProvider = StateProvider<int>((ref) => 0);
+final wordBoundariesProvider =
+    StateProvider<List<TextWordBoundary>>((ref) => const []);
+final wordCuesProvider = StateProvider<List<WordCue>>((ref) => const []);
 
 class TtsConfig {
-  const TtsConfig({this.modelPath, this.rate = 1.0});
+  const TtsConfig({
+    required this.voice,
+    this.rate = 1.0,
+    this.llmModel = defaultLlmModel,
+  });
 
-  final String? modelPath;
+  final VoiceSelection voice;
   final double rate;
+  final String llmModel;
 
-  TtsConfig copyWith({String? modelPath, double? rate}) => TtsConfig(
-        modelPath: modelPath ?? this.modelPath,
-        rate: rate ?? this.rate,
-      );
+  TtsConfig copyWith({
+    VoiceSelection? voice,
+    double? rate,
+    String? llmModel,
+  }) {
+    return TtsConfig(
+      voice: voice ?? this.voice,
+      rate: rate ?? this.rate,
+      llmModel: llmModel ?? this.llmModel,
+    );
+  }
 }
 
 class TtsConfigNotifier extends StateNotifier<TtsConfig> {
-  TtsConfigNotifier(super.state);
+  TtsConfigNotifier()
+      : super(
+          TtsConfig(
+            voice: VoiceSelection(
+              id: defaultVoiceId,
+              displayName: voiceModelPresets
+                  .firstWhere((p) => p.id == defaultVoiceId)
+                  .label,
+              backend: TtsEngineBackend.mock,
+            ),
+          ),
+        );
 
-  void selectModel(String path) {
-    state = state.copyWith(modelPath: path);
+  void selectVoice(VoiceSelection selection) {
+    state = state.copyWith(voice: selection);
+  }
+
+  void hydrateVoice(VoiceSelection selection) {
+    selectVoice(selection);
   }
 
   void updateRate(double value) {
     state = state.copyWith(rate: value);
   }
 
+  void selectLlmModel(String model) {
+    state = state.copyWith(llmModel: model);
+  }
+
   void updateFromPrompt(String prompt) {
-    // Placeholder: inspect prompt keywords and decide on a model.
-    if (prompt.toLowerCase().contains('spooky')) {
-      state = state.copyWith(modelPath: 'assets/models/en_us_amy_medium.onnx');
+    final lower = prompt.toLowerCase();
+    if (lower.contains('warm') || lower.contains('kind')) {
+      _selectVoiceById('amy-medium');
     }
+    if (lower.contains('energetic')) {
+      _selectVoiceById(defaultVoiceId);
+      updateRate(1.25);
+    }
+    if (lower.contains('slow')) {
+      updateRate(0.85);
+    }
+  }
+
+  void _selectVoiceById(String id) {
+    final preset = voiceModelPresets.firstWhere((p) => p.id == id);
+    selectVoice(
+      VoiceSelection(
+        id: preset.id,
+        displayName: preset.label,
+        backend: preset.backend,
+      ),
+    );
   }
 }
 
@@ -49,41 +104,79 @@ final ttsServiceProvider = Provider<TtsService>((ref) {
 });
 
 class TtsService {
-  TtsService(this._ref);
+  TtsService(this._ref) {
+    _ref.onDispose(() => _positionSub?.cancel());
+  }
 
   final Ref _ref;
+  StreamSubscription<Duration>? _positionSub;
 
-  Future<void> speak(String text) async {
+  Future<void> speak(String rawText) async {
+    final text = rawText.trim();
+    if (text.isEmpty) {
+      return;
+    }
+
+    final repo = _ref.read(modelRepositoryProvider);
     final config = _ref.read(ttsConfigProvider);
+    final notifier = _ref.read(ttsConfigProvider.notifier);
     final audioHandler = await _ref.read(audioHandlerProvider);
 
-    final backend = bridge.EngineBackend.auto(
-      modelPath: config.modelPath ?? _defaultModelPath,
-    );
-    final request = bridge.EngineRequest(
-      backend: backend,
-      gainDb: null,
-    );
+    var voice = await repo.ensureSelectionReady(config.voice);
+    notifier.hydrateVoice(voice);
 
-    final stream = bridge.streamAudio(
-      text: text,
-      request: request,
-    );
+    final backend = switch (voice.backend) {
+      TtsEngineBackend.mock => bridge.EngineBackend.auto(
+          modelPath: voice.modelPath ?? voice.displayName,
+        ),
+      TtsEngineBackend.piper => bridge.EngineBackend.piper(
+          bridge.PiperBackendConfig(
+            modelPath: voice.modelPath!,
+            configPath: voice.configPath,
+            speaker: null,
+            sampleRate: null,
+          ),
+        ),
+    };
+
+    final request = bridge.EngineRequest(backend: backend, gainDb: null);
+    final stream = bridge.streamAudio(text: text, request: request);
 
     final buffer = BytesBuilder();
     int? sampleRate;
 
-    await for (final chunk in stream) {
-      final pcmView = chunk.pcm.buffer.asUint8List();
-      buffer.add(pcmView);
-      sampleRate ??= chunk.sampleRate;
-      _ref.read(currentWordIndexProvider.notifier).state =
-          chunk.startTextIdx.toInt();
+    try {
+      await for (final chunk in stream) {
+        buffer.add(chunk.pcm.buffer.asUint8List());
+        sampleRate ??= chunk.sampleRate;
+      }
+    } catch (err) {
+      _ref.read(currentWordIndexProvider.notifier).state = 0;
+      rethrow;
     }
 
-    final collected = buffer.takeBytes();
-    await audioHandler.playPcm(collected, sampleRate ?? 16000);
+    final pcmBytes = buffer.takeBytes();
+    final resolvedRate = sampleRate ?? _fallbackSampleRate;
+
+    final duration = await audioHandler.playPcm(pcmBytes, resolvedRate);
+    final boundaries = computeWordBoundaries(text);
+    _ref.read(wordBoundariesProvider.notifier).state = boundaries;
+    final cues = buildWordCues(boundaries.length, duration);
+    _ref.read(wordCuesProvider.notifier).state = cues;
+    _ref.read(currentWordIndexProvider.notifier).state = 0;
+    _attachTimeline(audioHandler, cues);
+  }
+
+  void _attachTimeline(TtsAudioHandler handler, List<WordCue> cues) {
+    _positionSub?.cancel();
+    if (cues.isEmpty) {
+      return;
+    }
+    _positionSub = handler.positionStream().listen((position) {
+      final index = wordIndexForPosition(position, cues);
+      _ref.read(currentWordIndexProvider.notifier).state = index;
+    });
   }
 }
 
-const _defaultModelPath = 'assets/models/en_us_amy_medium.onnx';
+const _fallbackSampleRate = 16000;
