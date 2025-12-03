@@ -36,5 +36,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/models/en_us_amy_medium.onnx
-    - assets/models/en_us_amy_medium.json
+    - assets/models/en_us_amy_low.onnx
+    - assets/models/en_us_amy_low.onnx.json

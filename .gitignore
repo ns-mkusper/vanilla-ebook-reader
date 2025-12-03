@@ -68,9 +68,6 @@ build/
 target/
 **/target/
 
-# Assets - ignore large model files unless using Git LFS
-flutter_client/assets/**/*.onnx
-
 # Rust
 **/*.rs.bk
 

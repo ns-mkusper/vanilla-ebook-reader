@@ -74,22 +74,22 @@ class VoiceSelection {
   }
 }
 
-const defaultVoiceId = 'mock-orbit';
+const defaultVoiceId = 'amy-low';
 
 const voiceModelPresets = <VoiceModelPreset>[
+  VoiceModelPreset(
+    id: 'amy-low',
+    label: 'Amy · en-US · low',
+    description: 'Bundled Piper voice (fast 20 kHz female).',
+    backend: TtsEngineBackend.piper,
+    assetModelPath: 'assets/models/en_us_amy_low.onnx',
+    assetConfigPath: 'assets/models/en_us_amy_low.onnx.json',
+  ),
   VoiceModelPreset(
     id: 'mock-orbit',
     label: 'Orbit (procedural)',
     description: 'Fast synthetic voice useful for rapid iteration.',
     backend: TtsEngineBackend.mock,
-  ),
-  VoiceModelPreset(
-    id: 'amy-medium',
-    label: 'Amy · en-US · medium',
-    description: 'Bundled Piper voice (22.05 kHz, female).',
-    backend: TtsEngineBackend.piper,
-    assetModelPath: 'assets/models/en_us_amy_medium.onnx',
-    assetConfigPath: 'assets/models/en_us_amy_medium.json',
   ),
 ];
 
