@@ -156,11 +156,11 @@ fn resolve_engine(
     match backend {
         EngineBackend::Auto { model_path } => Ok(handle.mock_engine(model_path)),
         EngineBackend::Piper(config) => {
-            #[cfg(feature = "piper")]
+            #[cfg(all(feature = "piper", not(target_os = "windows")))]
             {
                 handle.load_piper(config)
             }
-            #[cfg(not(feature = "piper"))]
+            #[cfg(not(all(feature = "piper", not(target_os = "windows"))))]
             {
                 let _ = config;
                 Err(RegistryError::PiperUnavailable)

@@ -4,10 +4,10 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use thiserror::Error;
 
-#[cfg(feature = "piper")]
+#[cfg(all(feature = "piper", not(target_os = "windows")))]
 use crate::api::PiperBackendConfig;
 
-#[cfg(feature = "piper")]
+#[cfg(all(feature = "piper", not(target_os = "windows")))]
 pub mod piper;
 
 #[derive(Debug, Clone)]
@@ -31,7 +31,7 @@ pub enum RegistryError {
 
 pub struct EngineRegistryHandle {
     mock_engine: Arc<MockEngine>,
-    #[cfg(feature = "piper")]
+    #[cfg(all(feature = "piper", not(target_os = "windows")))]
     piper_engine: Arc<RwLock<Option<CachedPiperEngine>>>,
     active_model: Arc<RwLock<Option<String>>>,
 }
@@ -40,7 +40,7 @@ impl Clone for EngineRegistryHandle {
     fn clone(&self) -> Self {
         Self {
             mock_engine: Arc::clone(&self.mock_engine),
-            #[cfg(feature = "piper")]
+            #[cfg(all(feature = "piper", not(target_os = "windows")))]
             piper_engine: Arc::clone(&self.piper_engine),
             active_model: Arc::clone(&self.active_model),
         }
@@ -51,7 +51,7 @@ impl EngineRegistryHandle {
     pub fn new() -> Self {
         Self {
             mock_engine: Arc::new(MockEngine::default()),
-            #[cfg(feature = "piper")]
+            #[cfg(all(feature = "piper", not(target_os = "windows")))]
             piper_engine: Arc::new(RwLock::new(None)),
             active_model: Arc::new(RwLock::new(None)),
         }
@@ -67,7 +67,7 @@ impl EngineRegistryHandle {
         self.mock_engine.clone()
     }
 
-    #[cfg(feature = "piper")]
+    #[cfg(all(feature = "piper", not(target_os = "windows")))]
     pub fn load_piper(
         &self,
         config: &PiperBackendConfig,
@@ -108,7 +108,7 @@ impl Default for EngineRegistryHandle {
     }
 }
 
-#[cfg(feature = "piper")]
+#[cfg(all(feature = "piper", not(target_os = "windows")))]
 #[derive(Clone)]
 struct CachedPiperEngine {
     fingerprint: String,
