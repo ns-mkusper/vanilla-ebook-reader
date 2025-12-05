@@ -15,6 +15,8 @@ part 'api.freezed.dart';
 
             Future<void>  initRegistry({required EngineRegistryHandle handle }) => TtsBridge.instance.api.crateApiInitRegistry(handle: handle);
 
+Future<void>  initTracing({String? filter }) => TtsBridge.instance.api.crateApiInitTracing(filter: filter);
+
 Future<void>  bootstrapDefaultEngine() => TtsBridge.instance.api.crateApiBootstrapDefaultEngine();
 
 Future<TtsState>  currentState() => TtsBridge.instance.api.crateApiCurrentState();

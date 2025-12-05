@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:tts_flutter_client/api.dart' as bridge;
 
 import '../services/llm_models.dart';
@@ -47,13 +49,15 @@ class TtsConfigNotifier extends StateNotifier<TtsConfig> {
   TtsConfigNotifier()
       : super(
           TtsConfig(
-            voice: VoiceSelection(
-              id: defaultVoiceId,
-              displayName: voiceModelPresets
-                  .firstWhere((p) => p.id == defaultVoiceId)
-                  .label,
-              backend: TtsEngineBackend.mock,
-            ),
+            voice: () {
+              final preset = voiceModelPresets
+                  .firstWhere((p) => p.id == defaultVoiceId);
+              return VoiceSelection(
+                id: preset.id,
+                displayName: preset.label,
+                backend: preset.backend,
+              );
+            }(),
           ),
         );
 
@@ -150,7 +154,9 @@ class TtsService {
         buffer.add(chunk.pcm.buffer.asUint8List());
         sampleRate ??= chunk.sampleRate;
       }
-    } catch (err) {
+    } catch (err, stack) {
+      debugPrint('TTS stream failed: $err');
+      debugPrintStack(stackTrace: stack);
       _ref.read(currentWordIndexProvider.notifier).state = 0;
       rethrow;
     }
@@ -158,7 +164,12 @@ class TtsService {
     final pcmBytes = buffer.takeBytes();
     final resolvedRate = sampleRate ?? _fallbackSampleRate;
 
-    final duration = await audioHandler.playPcm(pcmBytes, resolvedRate);
+    final cacheDir = await getTemporaryDirectory();
+    final duration = await audioHandler.playPcm(
+      pcmBytes,
+      resolvedRate,
+      cacheDirPath: cacheDir.path,
+    );
     final boundaries = computeWordBoundaries(text);
     _ref.read(wordBoundariesProvider.notifier).state = boundaries;
     final cues = buildWordCues(boundaries.length, duration);

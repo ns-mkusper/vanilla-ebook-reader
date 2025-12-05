@@ -20,6 +20,9 @@ thiserror = "1"
 tracing = "0.1"
 once_cell = "1"
 parking_lot = "0.12"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-log = "0.1"
+log = "0.4"
 
 [features]
 default = ["bridge", "piper"]
@@ -44,3 +47,6 @@ ort-sys = { git = "https://github.com/pykeio/ort", tag = "v2.0.0-rc.9", package 
 [target.'cfg(not(target_os = "windows"))'.dependencies.piper-rs]
 version = "0.1.9"
 optional = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.15"

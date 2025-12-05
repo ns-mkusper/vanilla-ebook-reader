@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
@@ -24,14 +25,29 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<PlaybackEvent>? _eventSub;
   MediaItem? _currentItem;
+  File? _lastTempFile;
 
-  Future<Duration> playPcm(Uint8List pcmBytes, int sampleRate) async {
+  Future<Duration> playPcm(
+    Uint8List pcmBytes,
+    int sampleRate, {
+    required String cacheDirPath,
+  }) async {
     if (pcmBytes.isEmpty || sampleRate <= 0) {
       return Duration.zero;
     }
 
     final wavBytes = _buildWavBytes(pcmBytes, sampleRate);
-    final uri = Uri.dataFromBytes(wavBytes, mimeType: 'audio/wav');
+    final tempDir = Directory(cacheDirPath);
+    if (!tempDir.existsSync()) {
+      tempDir.createSync(recursive: true);
+    }
+    await _cleanupTempFile();
+    final tempFile = File(
+      '${tempDir.path}/tts_${DateTime.now().microsecondsSinceEpoch}.wav',
+    );
+    await tempFile.writeAsBytes(wavBytes, flush: true);
+    _lastTempFile = tempFile;
+    final uri = Uri.file(tempFile.path);
     final duration = Duration(
       milliseconds: (pcmBytes.length / 2 / sampleRate * 1000).round(),
     );
@@ -60,6 +76,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() async {
     await _player.stop();
+    await _cleanupTempFile();
     await super.stop();
   }
 
@@ -106,6 +123,17 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
       case ProcessingState.completed:
         return AudioProcessingState.completed;
     }
+  }
+
+  Future<void> _cleanupTempFile() async {
+    final file = _lastTempFile;
+    if (file == null) {
+      return;
+    }
+    if (await file.exists()) {
+      await file.delete().catchError((_) {});
+    }
+    _lastTempFile = null;
   }
 
   Uint8List _buildWavBytes(Uint8List pcmBytes, int sampleRate) {

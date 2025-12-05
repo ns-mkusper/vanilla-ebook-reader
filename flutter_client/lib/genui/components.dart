@@ -134,7 +134,7 @@ class LlmModelDropdown extends ConsumerWidget {
         labelText: 'GenUI LLM Model',
         border: OutlineInputBorder(),
       ),
-      value: config.llmModel,
+      initialValue: config.llmModel,
       items: [
         for (final option in llmModelOptions)
           DropdownMenuItem(

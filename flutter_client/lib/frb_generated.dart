@@ -68,7 +68,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
                   String get codegenVersion => '2.11.1';
 
                   @override
-                  int get rustContentHash => 1639405732;
+                  int get rustContentHash => 2011861626;
 
                   static const kDefaultExternalLibraryLoaderConfig = ExternalLibraryLoaderConfig(
                     stem: 'rust_core',
@@ -84,6 +84,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 Future<TtsState> crateApiCurrentState();
 
 Future<void> crateApiInitRegistry({required EngineRegistryHandle handle });
+
+Future<void> crateApiInitTracing({String? filter });
 
 Stream<AudioChunk> crateApiStreamAudio({required String text , required EngineRequest request });
 
@@ -180,6 +182,31 @@ CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_EngineRegistryHand
         );
         
 
+@override Future<void> crateApiInitTracing({String? filter })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_String(filter, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        )
+        ,
+            constMeta: kCrateApiInitTracingConstMeta,
+            argValues: [filter],
+            apiImpl: this,
+        )); }
+
+
+        TaskConstMeta get kCrateApiInitTracingConstMeta => const TaskConstMeta(
+            debugName: "init_tracing",
+            argNames: ["filter"],
+        );
+        
+
 @override Stream<AudioChunk> crateApiStreamAudio({required String text , required EngineRequest request })  { 
             final sink = RustStreamSink<AudioChunk>();
             unawaited(handler.executeNormal(NormalTask(
@@ -188,7 +215,7 @@ CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_EngineRegistryHand
             final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(text, serializer);
 sse_encode_box_autoadd_engine_request(request, serializer);
 sse_encode_StreamSink_audio_chunk_Sse(sink, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4, port: port_);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5, port: port_);
             
             },
             codec: 

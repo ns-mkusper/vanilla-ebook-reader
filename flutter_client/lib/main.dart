@@ -37,6 +37,10 @@ Future<void> _initializeRustBridge() async {
 
   final library = _resolveExternalLibrary();
   await TtsBridge.init(externalLibrary: library);
+  const rustLogFilter = String.fromEnvironment('RUST_LOG', defaultValue: '');
+  await bridge.initTracing(
+    filter: rustLogFilter.isEmpty ? null : rustLogFilter,
+  );
   await bridge.bootstrapDefaultEngine();
 }
 

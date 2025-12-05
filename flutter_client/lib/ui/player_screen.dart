@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/model_repository.dart';
 import '../services/text_analysis.dart';
 import '../services/tts_service.dart';
 
@@ -35,6 +36,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     final boundaries = ref.watch(wordBoundariesProvider);
     final effectiveBoundaries =
         boundaries.isEmpty ? computeWordBoundaries(widget.text) : boundaries;
+    final config = ref.watch(ttsConfigProvider);
+    final usesPiper = config.voice.backend == TtsEngineBackend.piper;
     return Scaffold(
       appBar: AppBar(title: const Text('Streaming Playback')),
       body: Padding(
@@ -42,6 +45,23 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Chip(
+                avatar: Icon(
+                  usesPiper ? Icons.graphic_eq : Icons.bolt,
+                  color: Theme.of(context).colorScheme.onSecondary,
+                ),
+                backgroundColor: usesPiper
+                    ? Theme.of(context).colorScheme.secondary
+                    : Theme.of(context).colorScheme.tertiaryContainer,
+                label: Text(
+                  usesPiper
+                      ? 'Real voice: ${config.voice.displayName}'
+                      : 'Synth preview voice',
+                ),
+              ),
+            ),
             const Text('Live Highlight'),
             const SizedBox(height: 12),
             Expanded(

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use std::thread;
 use std::time::Duration;
 
@@ -79,13 +79,44 @@ pub struct PiperBackendConfig {
 
 static ENGINE_REGISTRY: Lazy<RwLock<Option<EngineRegistryHandle>>> =
     Lazy::new(|| RwLock::new(None));
+static TRACING_INIT: Once = Once::new();
 
 pub fn init_registry(handle: EngineRegistryHandle) {
     *ENGINE_REGISTRY.write() = Some(handle);
 }
 
 #[cfg_attr(feature = "bridge", frb)]
+pub fn init_tracing(filter: Option<String>) {
+    let env_filter = filter
+        .or_else(|| std::env::var("RUST_LOG").ok())
+        .unwrap_or_else(|| "rust_core=info,piper_rs=info,ort=warn".to_string());
+
+    TRACING_INIT.call_once(move || {
+        #[cfg(target_os = "android")]
+        {
+            use android_logger::Config;
+            android_logger::init_once(
+                Config::default()
+                    .with_max_level(log::LevelFilter::Trace)
+                    .with_tag("rust_core"),
+            );
+        }
+
+        let _ = tracing_log::LogTracer::init();
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter(env_filter)
+            .with_target(true)
+            .with_ansi(cfg!(not(target_os = "android")))
+            .without_time()
+            .finish();
+
+        let _ = tracing::subscriber::set_global_default(subscriber);
+    });
+}
+
+#[cfg_attr(feature = "bridge", frb)]
 pub fn bootstrap_default_engine() {
+    init_tracing(None);
     if ENGINE_REGISTRY.read().is_none() {
         init_registry(EngineRegistryHandle::default());
     }

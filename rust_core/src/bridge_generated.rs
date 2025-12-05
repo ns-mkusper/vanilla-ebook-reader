@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1639405732;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2011861626;
 
 // Section: executor
 
@@ -140,6 +140,41 @@ fn wire__crate__api__init_registry_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok({
                         crate::api::init_registry(api_handle);
+                    })?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__init_tracing_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "init_tracing",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_filter = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok({
+                        crate::api::init_tracing(api_filter);
                     })?;
                     Ok(output_ok)
                 })())
@@ -441,7 +476,8 @@ fn pde_ffi_dispatcher_primary_impl(
         1 => wire__crate__api__bootstrap_default_engine_impl(port, ptr, rust_vec_len, data_len),
         2 => wire__crate__api__current_state_impl(port, ptr, rust_vec_len, data_len),
         3 => wire__crate__api__init_registry_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__stream_audio_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__init_tracing_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__stream_audio_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
