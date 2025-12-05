@@ -67,6 +67,7 @@ class ModelSelectorCard extends ConsumerWidget {
         id: preset.id,
         displayName: preset.label,
         backend: preset.backend,
+        modelPath: preset.id,
       );
     }
 

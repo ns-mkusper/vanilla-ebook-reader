@@ -98,7 +98,10 @@ class ModelRepository {
 
   Future<VoiceSelection> ensureSelectionReady(VoiceSelection selection) async {
     if (selection.backend != TtsEngineBackend.piper) {
-      return selection;
+      if (selection.modelPath != null) {
+        return selection;
+      }
+      return selection.copyWith(modelPath: selection.id);
     }
     if (selection.modelPath != null && selection.configPath != null) {
       return selection;
@@ -125,6 +128,7 @@ class ModelRepository {
         id: preset.id,
         displayName: preset.label,
         backend: preset.backend,
+        modelPath: preset.id,
       );
     }
     final modelAsset = preset.assetModelPath;

@@ -50,8 +50,8 @@ class TtsConfigNotifier extends StateNotifier<TtsConfig> {
       : super(
           TtsConfig(
             voice: () {
-              final preset = voiceModelPresets
-                  .firstWhere((p) => p.id == defaultVoiceId);
+              final preset =
+                  voiceModelPresets.firstWhere((p) => p.id == defaultVoiceId);
               return VoiceSelection(
                 id: preset.id,
                 displayName: preset.label,
@@ -131,7 +131,7 @@ class TtsService {
 
     final backend = switch (voice.backend) {
       TtsEngineBackend.mock => bridge.EngineBackend.auto(
-          modelPath: voice.modelPath ?? voice.displayName,
+          modelPath: voice.modelPath ?? voice.id,
         ),
       TtsEngineBackend.piper => bridge.EngineBackend.piper(
           bridge.PiperBackendConfig(
@@ -148,11 +148,19 @@ class TtsService {
 
     final buffer = BytesBuilder();
     int? sampleRate;
+    var chunkCount = 0;
+    var totalSamples = 0;
 
     try {
       await for (final chunk in stream) {
-        buffer.add(chunk.pcm.buffer.asUint8List());
+        final pcmView = chunk.pcm.buffer.asUint8List(
+          chunk.pcm.offsetInBytes,
+          chunk.pcm.lengthInBytes,
+        );
+        buffer.add(pcmView);
         sampleRate ??= chunk.sampleRate;
+        chunkCount++;
+        totalSamples += chunk.pcm.length;
       }
     } catch (err, stack) {
       debugPrint('TTS stream failed: $err');
@@ -162,7 +170,16 @@ class TtsService {
     }
 
     final pcmBytes = buffer.takeBytes();
+    if (totalSamples == 0) {
+      throw StateError(
+        'Engine ${voice.id} produced no audio (chunks=$chunkCount).',
+      );
+    }
     final resolvedRate = sampleRate ?? _fallbackSampleRate;
+    debugPrint(
+      'Synthesized ${pcmBytes.length} bytes ($totalSamples samples) at '
+      '${resolvedRate}Hz using voice ${voice.id} (${voice.backend}).',
+    );
 
     final cacheDir = await getTemporaryDirectory();
     final duration = await audioHandler.playPcm(

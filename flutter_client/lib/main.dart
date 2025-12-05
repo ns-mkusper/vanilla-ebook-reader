@@ -13,7 +13,7 @@ import 'ui/editor_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   configureGenUiLogging();
-  await _initializeRustBridge();
+  await initializeTtsBridge();
   runApp(const ProviderScope(child: TtsApp()));
 }
 
@@ -30,7 +30,12 @@ class TtsApp extends StatelessWidget {
   }
 }
 
-Future<void> _initializeRustBridge() async {
+bool _bridgeInitialized = false;
+
+Future<void> initializeTtsBridge() async {
+  if (_bridgeInitialized) {
+    return;
+  }
   if (kIsWeb) {
     throw UnsupportedError('Web is not yet supported for the TTS engine');
   }
@@ -42,6 +47,7 @@ Future<void> _initializeRustBridge() async {
     filter: rustLogFilter.isEmpty ? null : rustLogFilter,
   );
   await bridge.bootstrapDefaultEngine();
+  _bridgeInitialized = true;
 }
 
 ExternalLibrary _resolveExternalLibrary() {
