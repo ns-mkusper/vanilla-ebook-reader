@@ -92,25 +92,7 @@ jobs:
           profile: pixel_6
           emulator-boot-timeout: 1200
           working-directory: flutter_client
-          script: >-
-            bash -lc '
-            set -eux;
-            mkdir -p build/screenshots;
-            flutter run -t lib/screenshot_app.dart -d emulator-5554 --debug --no-pub > build/screenshots/flutter-run.log 2>&1 &
-            RUN_PID=$!;
-            for i in $(seq 1 90); do
-              if adb shell pidof com.example.just_read_it >/dev/null 2>&1; then
-                break;
-              fi;
-              sleep 2;
-            done;
-            sleep 5;
-            adb exec-out screencap -p > build/screenshots/01_editor_mobile.png;
-            adb shell input tap 195 785;
-            sleep 3;
-            adb exec-out screencap -p > build/screenshots/02_player_mobile.png;
-            kill $RUN_PID || true;
-            '
+          script: bash tool/android_screenshots.sh
       - name: Upload emulator screenshots
         uses: actions/upload-artifact@v4
         with:
