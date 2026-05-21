@@ -86,10 +86,11 @@ jobs:
       - name: Capture screenshots on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 29
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          emulator-boot-timeout: 1200
           working-directory: flutter_client
           script: >-
             bash -lc '
