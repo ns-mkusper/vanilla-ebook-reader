@@ -74,7 +74,7 @@ sleep 2
 clear_system_dialogs 01_editor_mobile
 assert_app_foreground 01_editor_mobile
 adb exec-out screencap -p > build/screenshots/01_editor_mobile.png
-adb shell input tap 195 785
+adb shell input tap 540 2200
 
 for _ in $(seq 1 120); do
   if grep -q 'JRI_TTS_WAV_PATH=' build/screenshots/flutter-run.log; then
