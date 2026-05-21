@@ -110,7 +110,9 @@ class _VoicePresetSheet extends ConsumerWidget {
                 for (final preset in voiceModelPresets)
                   RadioListTile<String>(
                     value: preset.id,
+                    // ignore: deprecated_member_use
                     groupValue: config.voice.id,
+                    // ignore: deprecated_member_use
                     onChanged: (_) => Navigator.of(context).pop(preset),
                     title: Text(preset.label),
                     subtitle: Text(preset.description),
@@ -131,6 +133,7 @@ class LlmModelDropdown extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(ttsConfigProvider);
     return DropdownButtonFormField<String>(
+      isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'GenUI LLM Model',
         border: OutlineInputBorder(),
@@ -140,7 +143,10 @@ class LlmModelDropdown extends ConsumerWidget {
         for (final option in llmModelOptions)
           DropdownMenuItem(
             value: option.id,
-            child: Text(option.label),
+            child: Text(
+              option.label,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
       ],
       onChanged: (value) {

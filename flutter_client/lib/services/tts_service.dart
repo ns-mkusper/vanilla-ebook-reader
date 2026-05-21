@@ -103,11 +103,15 @@ class TtsConfigNotifier extends StateNotifier<TtsConfig> {
   }
 }
 
-final ttsServiceProvider = Provider<TtsService>((ref) {
+final ttsServiceProvider = Provider<SpeechService>((ref) {
   return TtsService(ref);
 });
 
-class TtsService {
+abstract class SpeechService {
+  Future<void> speak(String rawText);
+}
+
+class TtsService implements SpeechService {
   TtsService(this._ref) {
     _ref.onDispose(() => _positionSub?.cancel());
   }
@@ -115,6 +119,7 @@ class TtsService {
   final Ref _ref;
   StreamSubscription<Duration>? _positionSub;
 
+  @override
   Future<void> speak(String rawText) async {
     final text = rawText.trim();
     if (text.isEmpty) {

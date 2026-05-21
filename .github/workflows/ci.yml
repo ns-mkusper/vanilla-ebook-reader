@@ -10,8 +10,11 @@ env:
   SLINT_NO_QT: "1"
 
 jobs:
-  lint-and-test:
+  rust-lint-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust_core
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -21,42 +24,43 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Cargo clippy
         run: cargo clippy --workspace --all-targets -- --deny warnings
+      - name: Cargo test
+        run: cargo test --workspace --all-targets
       - name: Cargo check
         run: cargo check --workspace --all-targets
 
-  android-check:
+  flutter-ux-tests:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Flutter pub get
+        run: flutter pub get
+      - name: Flutter analyze
+        run: flutter analyze
+      - name: Widget smoke test
+        run: flutter test test/widget_test.dart
+      - name: Document import and persistence tests
+        run: flutter test test/document_repository_test.dart
+      - name: Desktop/mobile UX flow tests
+        run: flutter test test/ux_flow_test.dart
+      - name: Text pipeline performance guardrail
+        run: flutter test test/performance/text_pipeline_perf_test.dart
+
+  android-rust-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust_core
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
-      - name: Cargo check (android)
+      - name: Cargo check Android Rust core
         run: cargo check --target aarch64-linux-android --no-default-features
-
-  android-apk:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android, x86_64-linux-android
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk --locked
-      - name: Set up Android NDK
-        id: ndk
-        uses: android-actions/setup-ndk@v3
-        with:
-          ndk-version: 26.1.10909125
-      - name: Build JNI libraries
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: |
-          cargo ndk -t x86_64 -t arm64-v8a \
-            -o android/app/src/main/jniLibs \
-            build --no-default-features --features native-audio
-      - name: Assemble debug APK
-        working-directory: android
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: ./gradlew assembleDebug

@@ -17,7 +17,7 @@ void main() {
     await tester.runAsync(() async {
       await app.initializeTtsBridge();
 
-      final request = bridge.EngineRequest(
+      const request = bridge.EngineRequest(
         backend: bridge.EngineBackend.auto(modelPath: 'mock-orbit'),
         gainDb: null,
       );
@@ -60,7 +60,11 @@ void main() {
       } finally {
         await stateSub.cancel();
         await player.dispose();
-        await wavFile.delete().catchError((_) {});
+        try {
+          await wavFile.delete();
+        } catch (_) {
+          // Best effort cleanup.
+        }
       }
     });
   });

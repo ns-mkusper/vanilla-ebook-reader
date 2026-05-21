@@ -62,10 +62,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 ),
               ),
             ),
-            const Text('Live Highlight'),
+            const Text('Live Highlight', key: Key('player.highlight.label')),
             const SizedBox(height: 12),
             Expanded(
               child: _HighlightedText(
+                key: const Key('player.highlight.text'),
                 text: widget.text,
                 activeIndex: wordIndex,
                 boundaries: effectiveBoundaries,
@@ -80,6 +81,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
 class _HighlightedText extends StatelessWidget {
   const _HighlightedText({
+    super.key,
     required this.text,
     required this.activeIndex,
     required this.boundaries,
@@ -124,6 +126,7 @@ class _HighlightedText extends StatelessWidget {
     }
     return SingleChildScrollView(
       child: RichText(
+        key: const Key('player.highlight.rich_text'),
         text: TextSpan(
           style: Theme.of(context).textTheme.bodyLarge,
           children: spans,

@@ -195,3 +195,26 @@ pub fn chunk_audio_samples(
 
     frames
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{MockEngine, TTSEngine};
+
+    #[test]
+    fn mock_orbit_voice_produces_deterministic_audible_audio() {
+        let engine = MockEngine::default();
+        let frames = engine
+            .synthesize("alpha beta")
+            .expect("mock voice should synthesize");
+        let samples: Vec<i16> = frames
+            .iter()
+            .flat_map(|frame| frame.samples.iter().copied())
+            .collect();
+
+        assert_eq!(frames[0].sample_rate, 16_000);
+        assert_eq!(samples.len(), 10_560);
+        assert!(samples.iter().map(|sample| sample.abs()).max().unwrap() > 2_000);
+        assert!(samples[1_000].abs() > 500);
+        assert_ne!(samples[1_000], samples[6_280]);
+    }
+}

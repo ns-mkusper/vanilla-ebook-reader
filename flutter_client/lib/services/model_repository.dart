@@ -74,13 +74,14 @@ class VoiceSelection {
   }
 }
 
-const defaultVoiceId = 'amy-low';
+const defaultVoiceId = 'mock-orbit';
 
 const voiceModelPresets = <VoiceModelPreset>[
   VoiceModelPreset(
     id: 'amy-low',
     label: 'Amy · en-US · low',
-    description: 'Bundled Piper voice (fast 20 kHz female).',
+    description:
+        'Piper voice (fast 20 kHz female) when model assets are provided.',
     backend: TtsEngineBackend.piper,
     assetModelPath: 'assets/models/en_us_amy_low.onnx',
     assetConfigPath: 'assets/models/en_us_amy_low.onnx.json',

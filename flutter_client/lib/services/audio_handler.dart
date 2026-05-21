@@ -76,6 +76,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() async {
     await _player.stop();
+    await _eventSub?.cancel();
     await _cleanupTempFile();
     await super.stop();
   }
@@ -131,7 +132,11 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
       return;
     }
     if (await file.exists()) {
-      await file.delete().catchError((_) {});
+      try {
+        await file.delete();
+      } catch (_) {
+        // Best effort cache cleanup.
+      }
     }
     _lastTempFile = null;
   }
