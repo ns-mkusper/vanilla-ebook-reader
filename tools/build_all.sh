@@ -74,7 +74,7 @@ sync_local_properties() {
 
 usage() {
   cat <<USAGE
-Build orchestrator for the TTS Beast stack.
+Build orchestrator for the Just Read It stack.
 
 Usage: $0 [options] [steps]
 

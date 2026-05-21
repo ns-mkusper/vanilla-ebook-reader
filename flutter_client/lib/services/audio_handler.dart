@@ -10,8 +10,8 @@ final audioHandlerProvider = Provider<Future<TtsAudioHandler>>((ref) async {
   return AudioService.init(
     builder: () => TtsAudioHandler(),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'tts.beast.channel',
-      androidNotificationChannelName: 'TTS Beast',
+      androidNotificationChannelId: 'just.read.it.channel',
+      androidNotificationChannelName: 'Just Read It',
       androidNotificationOngoing: true,
     ),
   );
@@ -53,8 +53,8 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     );
     _currentItem = MediaItem(
       id: uri.toString(),
-      album: 'Generated Speech',
-      title: 'TTS Playback',
+      album: 'Just Read It',
+      title: 'Read-Aloud Playback',
       duration: duration,
     );
     mediaItem.add(_currentItem);

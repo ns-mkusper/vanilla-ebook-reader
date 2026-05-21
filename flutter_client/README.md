@@ -1,16 +1,5 @@
-# tts_flutter_client
+# Just Read It Flutter Client
 
-A new Flutter project.
+This Flutter client provides the Just Read It reading and playback UI. It connects to the Rust TTS core through Flutter Rust Bridge, manages background playback, and renders word-by-word highlighting while text is read aloud.
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+From the repository root, see `README.md` for setup, code generation, and build instructions.

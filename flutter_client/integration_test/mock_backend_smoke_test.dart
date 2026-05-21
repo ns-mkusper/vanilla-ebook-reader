@@ -6,8 +6,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:tts_flutter_client/api.dart' as bridge;
-import 'package:tts_flutter_client/main.dart' as app;
+import 'package:just_read_it/api.dart' as bridge;
+import 'package:just_read_it/main.dart' as app;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

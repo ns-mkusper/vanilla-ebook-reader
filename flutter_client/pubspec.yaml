@@ -1,5 +1,5 @@
-name: tts_flutter_client
-description: GenUI-driven background TTS controller powered by a Rust core
+name: just_read_it
+description: No-nonsense read-aloud app for ebooks and text files powered by Flutter and Rust
 publish_to: 'none'
 version: 0.1.0
 

@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:tts_flutter_client/main.dart';
+import 'package:just_read_it/main.dart';
 
 void main() {
   testWidgets('Editor screen renders primary actions', (tester) async {

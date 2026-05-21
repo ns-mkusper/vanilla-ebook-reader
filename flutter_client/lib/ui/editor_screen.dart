@@ -33,7 +33,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TTS Beast Editor'),
+        title: const Text('Just Read It'),
         actions: [
           IconButton(
             icon: const Icon(Icons.smart_toy),
@@ -51,7 +51,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 controller: _controller,
                 maxLines: 6,
                 decoration: const InputDecoration(
-                  hintText: 'Paste or dictate text to synthesize...',
+                  hintText: 'Paste ebook or text content to read aloud...',
                   border: OutlineInputBorder(),
                 ),
               ),

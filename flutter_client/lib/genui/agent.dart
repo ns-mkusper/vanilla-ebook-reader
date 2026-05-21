@@ -148,7 +148,7 @@ class LocalEchoContentGenerator implements ContentGenerator {
 String _buildSystemPrompt() {
   final voices = voiceModelPresets.map((v) => v.id).join(', ');
   final llms = llmModelOptions.map((m) => m.id).join(', ');
-  return '''You help configure a text-to-speech workstation called TTS Beast.
+  return '''You help configure Just Read It, a no-nonsense read-aloud app for ebooks and text files.
 Available voices: $voices.
 Available GenUI LLM models: $llms.
 Always call the TTS configuration tools to set voice, playback rate, and LLM when the user describes a new vibe.''';

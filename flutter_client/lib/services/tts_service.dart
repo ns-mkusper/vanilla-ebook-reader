@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:tts_flutter_client/api.dart' as bridge;
+import 'package:just_read_it/api.dart' as bridge;
 
 import '../services/llm_models.dart';
 import '../services/model_repository.dart';

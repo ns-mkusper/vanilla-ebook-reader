@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:genui/genui.dart';
-import 'package:tts_flutter_client/api.dart' as bridge;
-import 'package:tts_flutter_client/frb_generated.dart';
+import 'package:just_read_it/api.dart' as bridge;
+import 'package:just_read_it/frb_generated.dart';
 
 import 'ui/editor_screen.dart';
 
@@ -23,7 +23,7 @@ class TtsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TTS Beast',
+      title: 'Just Read It',
       theme: ThemeData.dark(),
       home: const EditorScreen(),
     );

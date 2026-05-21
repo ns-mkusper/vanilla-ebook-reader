@@ -1,11 +1,13 @@
-# Vanilla Ebook Reader
+# Just Read It
 
-Vanilla Ebook Reader is a text-to-speech controller for Android and iOS built from Flutter UI layers and a Rust synthesis core. Highlights:
+Just Read It is a no-nonsense Android text-to-speech app for turning ebooks and text files into readable, listenable playback. It pairs a Flutter UI with a Rust synthesis core so the app can read aloud while visually tracking text word by word.
 
-- **Paste-and-play workflow** – enter arbitrary text and stream it immediately through the integrated player.
+Highlights:
+
+- **Ebook and text-first workflow** – bring in long-form reading material, paste text, or dictate text and stream it immediately through the integrated player.
+- **Graphical read-aloud experience** – follow along as each word is highlighted in sync with generated speech.
+- **Background playback** – `audio_service`/`just_audio` keep narration active with Android foreground notifications and iOS `UIBackgroundModes = audio`.
 - **Voice and LLM controls** – select between the bundled Piper preset or procedural mock voice, and drive UI tuning via GenUI + Gemini models.
-- **Word-level highlighting** – the Rust backend emits chunk indices so the Flutter client highlights each word in sync.
-- **Background audio compliance** – `audio_service`/`just_audio` keep playback active with Android foreground notifications and iOS `UIBackgroundModes = audio`.
 - **Offline voice asset** – the low-tier `en_us_amy_low` Piper model is packaged under `assets/`, ensuring speech synthesis without network access.
 
 The repository is organized as a split Flutter/Rust workspace so engines, bindings, and UI can evolve independently.
@@ -86,10 +88,6 @@ The repository is organized as a split Flutter/Rust workspace so engines, bindin
 - `flutter build apk` when requested
 
 Because the generator reads the YAML config, Windows paths are normalized and the previous `compute_mod_from_rust_path` “prefix not found” panic is resolved.
-
-## Tooling
-
-Refer to `tools/build_all.sh` for an overview of the multi-platform build pipeline. The script wraps `flutter_rust_bridge_codegen`, `cargo ndk`, `cargo lipo`, and Flutter build targets so that a single entry point can regenerate bindings and artifacts for every target.
 
 ## Performance Guardrails
 
