@@ -92,7 +92,7 @@ jobs:
           profile: pixel_6
           working-directory: flutter_client
           script: |
-            set -euxo pipefail
+            set -eux
             mkdir -p build/screenshots
             flutter run -t lib/screenshot_app.dart -d emulator-5554 --debug --no-pub > build/screenshots/flutter-run.log 2>&1 &
             RUN_PID=$!
