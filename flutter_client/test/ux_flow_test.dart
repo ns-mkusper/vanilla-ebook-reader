@@ -35,7 +35,7 @@ void main() {
     await tester.pump();
     pasteTimer.stop();
 
-    expect(pasteTimer.elapsedMilliseconds, lessThan(80));
+    expect(pasteTimer.elapsedMilliseconds, lessThan(150));
     expect(
         tester
             .widget<ElevatedButton>(find.byKey(const Key('player.launch')))

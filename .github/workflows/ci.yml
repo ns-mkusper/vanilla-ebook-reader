@@ -47,17 +47,16 @@ jobs:
         run: flutter test test/widget_test.dart
       - name: Document import and persistence tests
         run: flutter test test/document_repository_test.dart
-      - name: Desktop/mobile UX flow tests
-        run: flutter test test/ux_flow_test.dart
       - name: Capture app screenshots
         run: dart run tool/generate_ci_screenshots.dart
       - name: Upload app screenshots
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: app-screenshots
           path: flutter_client/build/screenshots/*
           if-no-files-found: error
+      - name: Desktop/mobile UX flow tests
+        run: flutter test test/ux_flow_test.dart
       - name: Text pipeline performance guardrail
         run: flutter test test/performance/text_pipeline_perf_test.dart
 
