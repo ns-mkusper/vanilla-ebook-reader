@@ -73,6 +73,7 @@ jobs:
       - name: Cargo check Android Rust core
         run: cargo check --target aarch64-linux-android --no-default-features
 
+
   android-emulator-screenshots:
     runs-on: ubuntu-latest
     defaults:
