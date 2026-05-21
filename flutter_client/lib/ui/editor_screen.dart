@@ -113,12 +113,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 160),
                     child: Text(
                       _title,
                       key: const Key('document.title'),
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
@@ -128,7 +133,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                     label: const Text('New Text'),
                     onPressed: _startNewDocument,
                   ),
-                  const SizedBox(width: 8),
                   FilledButton.icon(
                     key: const Key('document.import'),
                     icon: const Icon(Icons.upload_file),
@@ -179,7 +183,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       child: ElevatedButton.icon(
         key: const Key('player.launch'),
         icon: const Icon(Icons.graphic_eq),
-        label: const Text('Stream to Player'),
+        label: const Text('Read Aloud'),
         onPressed: _controller.text.trim().isEmpty
             ? null
             : () => _launchPlayer(context),
