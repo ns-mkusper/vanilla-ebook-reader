@@ -27,27 +27,27 @@ void main() {
         child: const TtsApp(),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
 
     await tester.enterText(
       find.byKey(const Key('editor.text')),
       'Screenshot fixture: a copyright-free sample paragraph ready to read aloud.',
     );
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Read Aloud'), findsOneWidget);
 
     if (Platform.isAndroid) {
       await binding.convertFlutterSurfaceToImage();
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 500));
     }
     await binding.takeScreenshot('01_editor_mobile');
 
     await tester.tap(find.text('Read Aloud'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 10)),
     );
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(speech.lastText, contains('Screenshot fixture'));
     expect(find.text('Streaming Playback'), findsOneWidget);
