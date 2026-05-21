@@ -84,6 +84,8 @@ jobs:
         run: flutter create --platforms=android --project-name just_read_it .
       - name: Flutter pub get
         run: flutter pub get
+      - name: Install Rust Android target
+        run: rustup target add x86_64-linux-android
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
       - name: Build Android Rust bridge library
