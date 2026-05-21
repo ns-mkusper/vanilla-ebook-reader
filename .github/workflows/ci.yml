@@ -26,6 +26,14 @@ jobs:
         run: cargo clippy --workspace --all-targets -- --deny warnings
       - name: Cargo test
         run: cargo test --workspace --all-targets
+      - name: Generate validated voice sample
+        run: cargo run --example generate_mock_voice_sample -- target/just_read_it_voice_sample.wav
+      - name: Upload validated voice sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-sample-audio
+          path: rust_core/target/just_read_it_voice_sample.wav
+          if-no-files-found: error
       - name: Cargo check
         run: cargo check --workspace --all-targets
 
@@ -101,4 +109,5 @@ jobs:
           path: |
             flutter_client/build/screenshots/*.png
             flutter_client/build/screenshots/*.log
+            flutter_client/build/screenshots/*.xml
           if-no-files-found: error
