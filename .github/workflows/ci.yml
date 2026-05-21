@@ -94,8 +94,11 @@ jobs:
           working-directory: flutter_client
           script: bash tool/android_screenshots.sh
       - name: Upload emulator screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: emulator-screenshots
-          path: flutter_client/build/screenshots/*.png
+          path: |
+            flutter_client/build/screenshots/*.png
+            flutter_client/build/screenshots/*.log
           if-no-files-found: error

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -30,6 +31,13 @@ Future<void> main() async {
       child: const TtsApp(),
     ),
   );
+
+  Timer(const Duration(seconds: 2), () {
+    // The Android screenshot workflow waits for this before capturing, so it
+    // does not grab the native launch/splash screen.
+    // ignore: avoid_print
+    print('JRI_SCREENSHOT_READY');
+  });
 }
 
 class _ScreenshotSpeechService implements SpeechService {
