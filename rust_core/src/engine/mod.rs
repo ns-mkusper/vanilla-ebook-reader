@@ -149,7 +149,7 @@ impl TTSEngine for MockEngine {
                 pcm.push(sample);
             }
             // brief silence between words
-            pcm.extend(std::iter::repeat(0).take((sample_rate as f32 * 0.05) as usize));
+            pcm.extend(std::iter::repeat_n(0, (sample_rate as f32 * 0.05) as usize));
         }
         if pcm.is_empty() {
             pcm.resize(800, 0);

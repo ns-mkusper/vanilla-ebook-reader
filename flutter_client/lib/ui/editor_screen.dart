@@ -20,6 +20,7 @@ class EditorScreen extends ConsumerStatefulWidget {
 class _EditorScreenState extends ConsumerState<EditorScreen> {
   final TextEditingController _controller = TextEditingController();
   var _title = 'Untitled note';
+  Timer? _draftSaveDebounce;
   var _status = 'Loading saved text...';
   var _hydrating = true;
 
@@ -32,6 +33,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   @override
   void dispose() {
+    _draftSaveDebounce?.cancel();
     _controller
       ..removeListener(_handleTextChanged)
       ..dispose();
@@ -62,11 +64,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   void _handleTextChanged() {
     if (!_hydrating) {
-      unawaited(_saveCurrentDraft());
+      _scheduleDraftSave();
     }
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _scheduleDraftSave() {
+    _draftSaveDebounce?.cancel();
+    _draftSaveDebounce = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_saveCurrentDraft());
+    });
   }
 
   Future<void> _saveCurrentDraft() async {
