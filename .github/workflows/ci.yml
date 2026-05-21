@@ -47,14 +47,6 @@ jobs:
         run: flutter test test/widget_test.dart
       - name: Document import and persistence tests
         run: flutter test test/document_repository_test.dart
-      - name: Capture app screenshots
-        run: dart run tool/generate_ci_screenshots.dart
-      - name: Upload app screenshots
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-screenshots
-          path: flutter_client/build/screenshots/*
-          if-no-files-found: error
       - name: Desktop/mobile UX flow tests
         run: flutter test test/ux_flow_test.dart
       - name: Text pipeline performance guardrail
@@ -72,3 +64,37 @@ jobs:
           targets: aarch64-linux-android
       - name: Cargo check Android Rust core
         run: cargo check --target aarch64-linux-android --no-default-features
+
+  android-emulator-screenshots:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Generate Android project
+        run: flutter create --platforms=android --project-name just_read_it .
+      - name: Flutter pub get
+        run: flutter pub get
+      - name: Run screenshot flow on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          working-directory: flutter_client
+          script: flutter drive --driver=test_driver/integration_test.dart --target=integration_test/screenshot_flow_test.dart -d emulator-5554
+      - name: Upload emulator screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-screenshots
+          path: flutter_client/build/screenshots/*.png
+          if-no-files-found: error
