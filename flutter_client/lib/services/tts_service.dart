@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -187,6 +188,11 @@ class TtsService implements SpeechService {
     );
 
     final cacheDir = await getTemporaryDirectory();
+    await _exportTtsWavIfRequested(
+      pcmBytes,
+      resolvedRate,
+      cacheDirPath: cacheDir.path,
+    );
     final duration = await audioHandler.playPcm(
       pcmBytes,
       resolvedRate,
@@ -198,6 +204,40 @@ class TtsService implements SpeechService {
     _ref.read(wordCuesProvider.notifier).state = cues;
     _ref.read(currentWordIndexProvider.notifier).state = 0;
     _attachTimeline(audioHandler, cues);
+  }
+
+  Future<void> _exportTtsWavIfRequested(
+    Uint8List pcmBytes,
+    int sampleRate, {
+    required String cacheDirPath,
+  }) async {
+    const shouldExport = bool.fromEnvironment('JRI_EXPORT_TTS_WAV');
+    if (!shouldExport) {
+      return;
+    }
+    final file = File('$cacheDirPath/just_read_it_voice_sample.wav');
+    await file.writeAsBytes(_wavBytes(pcmBytes, sampleRate), flush: true);
+    debugPrint('JRI_TTS_WAV_PATH=${file.path}');
+  }
+
+  Uint8List _wavBytes(Uint8List pcmBytes, int sampleRate) {
+    final header = ByteData(44);
+    header.setUint32(0, 0x52494646, Endian.big); // RIFF
+    header.setUint32(4, 36 + pcmBytes.length, Endian.little);
+    header.setUint32(8, 0x57415645, Endian.big); // WAVE
+    header.setUint32(12, 0x666d7420, Endian.big); // fmt
+    header.setUint32(16, 16, Endian.little);
+    header.setUint16(20, 1, Endian.little);
+    header.setUint16(22, 1, Endian.little);
+    header.setUint32(24, sampleRate, Endian.little);
+    header.setUint32(28, sampleRate * 2, Endian.little);
+    header.setUint16(32, 2, Endian.little);
+    header.setUint16(34, 16, Endian.little);
+    header.setUint32(36, 0x64617461, Endian.big); // data
+    header.setUint32(40, pcmBytes.length, Endian.little);
+    return Uint8List(44 + pcmBytes.length)
+      ..setRange(0, 44, header.buffer.asUint8List())
+      ..setRange(44, 44 + pcmBytes.length, pcmBytes);
   }
 
   void _attachTimeline(TtsAudioHandler handler, List<WordCue> cues) {

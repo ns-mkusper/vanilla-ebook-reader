@@ -26,14 +26,6 @@ jobs:
         run: cargo clippy --workspace --all-targets -- --deny warnings
       - name: Cargo test
         run: cargo test --workspace --all-targets
-      - name: Generate validated voice sample
-        run: cargo run --example generate_mock_voice_sample -- target/just_read_it_voice_sample.wav
-      - name: Upload validated voice sample
-        uses: actions/upload-artifact@v4
-        with:
-          name: voice-sample-audio
-          path: rust_core/target/just_read_it_voice_sample.wav
-          if-no-files-found: error
       - name: Cargo check
         run: cargo check --workspace --all-targets
 
@@ -92,7 +84,15 @@ jobs:
         run: flutter create --platforms=android --project-name just_read_it .
       - name: Flutter pub get
         run: flutter pub get
-      - name: Capture screenshots on Android emulator
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+      - name: Build Android Rust bridge library
+        run: |
+          cd ../rust_core
+          cargo ndk -t x86_64 \
+            -o ../flutter_client/android/app/src/main/jniLibs \
+            build --no-default-features --features bridge
+      - name: Capture screenshots and voice sample on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
@@ -111,4 +111,5 @@ jobs:
             flutter_client/build/screenshots/*.png
             flutter_client/build/screenshots/*.log
             flutter_client/build/screenshots/*.xml
+            flutter_client/build/screenshots/*.wav
           if-no-files-found: error

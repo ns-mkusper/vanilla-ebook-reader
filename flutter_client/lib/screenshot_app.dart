@@ -4,9 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'main.dart';
+import 'main.dart' as app;
 import 'services/document_repository.dart';
-import 'services/tts_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,14 +20,14 @@ Future<void> main() async {
     ),
   );
 
+  await app.initializeTtsBridge();
   runApp(
     ProviderScope(
       overrides: [
         documentDirectoryProvider.overrideWith((ref) async => directory),
         documentRepositoryProvider.overrideWithValue(repository),
-        ttsServiceProvider.overrideWithValue(_ScreenshotSpeechService()),
       ],
-      child: const TtsApp(),
+      child: const app.TtsApp(),
     ),
   );
 
@@ -40,7 +39,3 @@ Future<void> main() async {
   });
 }
 
-class _ScreenshotSpeechService implements SpeechService {
-  @override
-  Future<void> speak(String rawText) async {}
-}

@@ -2,7 +2,7 @@
 set -euxo pipefail
 
 mkdir -p build/screenshots
-flutter run -t lib/screenshot_app.dart -d emulator-5554 --debug --no-pub > build/screenshots/flutter-run.log 2>&1 &
+flutter run -t lib/screenshot_app.dart -d emulator-5554 --debug --no-pub --dart-define=JRI_EXPORT_TTS_WAV=true > build/screenshots/flutter-run.log 2>&1 &
 RUN_PID=$!
 trap 'kill "$RUN_PID" >/dev/null 2>&1 || true' EXIT
 
@@ -75,6 +75,24 @@ clear_system_dialogs 01_editor_mobile
 assert_app_foreground 01_editor_mobile
 adb exec-out screencap -p > build/screenshots/01_editor_mobile.png
 adb shell input tap 195 785
+
+for _ in $(seq 1 120); do
+  if grep -q 'JRI_TTS_WAV_PATH=' build/screenshots/flutter-run.log; then
+    break
+  fi
+  sleep 2
+done
+
+if ! grep -q 'JRI_TTS_WAV_PATH=' build/screenshots/flutter-run.log; then
+  echo "UI interaction did not produce exported TTS WAV" >&2
+  cat build/screenshots/flutter-run.log >&2 || true
+  exit 1
+fi
+
+WAV_PATH=$(grep 'JRI_TTS_WAV_PATH=' build/screenshots/flutter-run.log | tail -1 | sed 's/.*JRI_TTS_WAV_PATH=//')
+adb exec-out run-as com.example.just_read_it cat "$WAV_PATH" > build/screenshots/voice_sample_from_emulator.wav
+python3 ../tools/validate_wav.py build/screenshots/voice_sample_from_emulator.wav
+
 sleep 3
 clear_system_dialogs 02_player_mobile
 assert_app_foreground 02_player_mobile
@@ -82,4 +100,5 @@ adb exec-out screencap -p > build/screenshots/02_player_mobile.png
 
 test -s build/screenshots/01_editor_mobile.png
 test -s build/screenshots/02_player_mobile.png
+test -s build/screenshots/voice_sample_from_emulator.wav
 python3 ../tools/validate_pngs.py build/screenshots/01_editor_mobile.png build/screenshots/02_player_mobile.png
