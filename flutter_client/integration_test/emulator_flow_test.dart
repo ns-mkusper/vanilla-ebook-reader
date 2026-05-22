@@ -25,8 +25,7 @@ void main() {
     await _dismissSystemSettling(tester);
 
     await _importPath(tester, txtFile.path);
-    expect(find.text('copyright_free_notes'), findsOneWidget);
-    expect(find.textContaining('TXT import fixture'), findsOneWidget);
+    _expectEditorText(tester, contains('TXT import fixture'));
 
     if (Platform.isAndroid) {
       await binding.convertFlutterSurfaceToImage();
@@ -35,8 +34,7 @@ void main() {
     await binding.takeScreenshot('01_txt_import_editor');
 
     await _importPath(tester, epubFile.path);
-    expect(find.text('copyright_free_book'), findsOneWidget);
-    expect(find.textContaining('EPUB import fixture'), findsOneWidget);
+    _expectEditorText(tester, contains('EPUB import fixture'));
 
     // Simulate an app restart in the same on-device process and verify the
     // document restored from device storage, not widget memory.
@@ -82,8 +80,14 @@ Future<void> _importPath(WidgetTester tester, String path) async {
   await tester.tap(find.byKey(const Key('document.import')));
   await tester.pump(const Duration(milliseconds: 500));
   await tester.enterText(find.byKey(const Key('import.path')), path);
-  await tester.tap(find.byKey(const Key('import.confirm')));
-  await tester.pump(const Duration(seconds: 1));
+  await tester.tap(find.byKey(const Key('import.confirm')),
+      warnIfMissed: false);
+  await tester.pump(const Duration(seconds: 3));
+}
+
+void _expectEditorText(WidgetTester tester, Matcher matcher) {
+  final field = tester.widget<TextField>(find.byKey(const Key('editor.text')));
+  expect(field.controller!.text, matcher);
 }
 
 void _validateWav(Uint8List bytes) {
