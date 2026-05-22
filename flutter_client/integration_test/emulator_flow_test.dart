@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_read_it/main.dart' as app;
@@ -12,30 +11,6 @@ import 'package:path_provider/path_provider.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
-  testWidgets('txt import via emulator UI produces editor screenshot',
-      (tester) async {
-    final tempDir = await getTemporaryDirectory();
-    final txtFile = File('${tempDir.path}/copyright_free_notes.txt');
-    await txtFile.writeAsString(_txtSample, flush: true);
-
-    await app.main();
-    await tester.pump(const Duration(seconds: 2));
-    await _dismissSystemSettling(tester);
-
-    await _importPath(tester, txtFile.path, contains('TXT import fixture'));
-
-    if (Platform.isAndroid) {
-      await binding.convertFlutterSurfaceToImage();
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
-    }
-    await binding.takeScreenshot('01_txt_import_editor');
-    if (Platform.isAndroid) {
-      await const MethodChannel('plugins.flutter.io/integration_test')
-          .invokeMethod<void>('revertFlutterImage');
-      await tester.pump(const Duration(milliseconds: 500));
-    }
-  });
 
   testWidgets('full emulator import persistence voice playback flow',
       (tester) async {

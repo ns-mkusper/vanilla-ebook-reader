@@ -4,11 +4,17 @@ set -euxo pipefail
 mkdir -p build/screenshots
 flutter drive \
   --driver=test_driver/integration_test.dart \
+  --target=integration_test/emulator_txt_screenshot_test.dart \
+  -d emulator-5554 \
+  > build/screenshots/flutter-run.log 2>&1
+
+flutter drive \
+  --driver=test_driver/integration_test.dart \
   --target=integration_test/emulator_flow_test.dart \
   -d emulator-5554 \
   --keep-app-running \
   --dart-define=JRI_EXPORT_TTS_WAV=true \
-  > build/screenshots/flutter-run.log 2>&1
+  >> build/screenshots/flutter-run.log 2>&1
 
 if grep -Eq "Unable to bind to AudioService|PlatformException|MissingPluginException" build/screenshots/flutter-run.log; then
   echo "Native audio playback error detected in emulator log" >&2
