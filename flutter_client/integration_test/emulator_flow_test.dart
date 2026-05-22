@@ -33,7 +33,11 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpWidget(const ProviderScope(child: app.TtsApp()));
-    await tester.pump(const Duration(seconds: 1));
+    await _pumpUntil(
+      tester,
+      () => _editorText(tester).contains('Simple book speech fixture'),
+      timeout: const Duration(seconds: 30),
+    );
     final restoredField = tester.widget<TextField>(
       find.byKey(const Key('editor.text')),
     );
