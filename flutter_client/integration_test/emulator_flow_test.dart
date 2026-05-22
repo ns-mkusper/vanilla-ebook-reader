@@ -24,8 +24,7 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await _dismissSystemSettling(tester);
 
-    await _importPath(tester, txtFile.path);
-    _expectEditorText(tester, contains('TXT import fixture'));
+    await _importPath(tester, txtFile.path, contains('TXT import fixture'));
 
     if (Platform.isAndroid) {
       await binding.convertFlutterSurfaceToImage();
@@ -33,8 +32,7 @@ void main() {
     }
     await binding.takeScreenshot('01_txt_import_editor');
 
-    await _importPath(tester, epubFile.path);
-    _expectEditorText(tester, contains('EPUB import fixture'));
+    await _importPath(tester, epubFile.path, contains('EPUB import fixture'));
 
     // Simulate an app restart in the same on-device process and verify the
     // document restored from device storage, not widget memory.
@@ -76,13 +74,56 @@ Future<void> _dismissSystemSettling(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
 }
 
-Future<void> _importPath(WidgetTester tester, String path) async {
+Future<void> _importPath(
+  WidgetTester tester,
+  String path,
+  Matcher expectedText,
+) async {
+  await tester.ensureVisible(find.byKey(const Key('document.import')));
   await tester.tap(find.byKey(const Key('document.import')));
-  await tester.pump(const Duration(milliseconds: 500));
+  await _pumpUntilFound(tester, find.byKey(const Key('import.path')));
   await tester.enterText(find.byKey(const Key('import.path')), path);
+  await tester.pump(const Duration(milliseconds: 300));
+  tester.testTextInput.hide();
+  await tester.pump(const Duration(milliseconds: 300));
   await tester.tap(find.byKey(const Key('import.confirm')),
       warnIfMissed: false);
-  await tester.pump(const Duration(seconds: 3));
+  await _pumpUntil(
+    tester,
+    () => _editorText(tester).contains(_expectedNeedle(expectedText)),
+    timeout: const Duration(seconds: 10),
+  );
+  _expectEditorText(tester, expectedText);
+}
+
+String _editorText(WidgetTester tester) {
+  final field = tester.widget<TextField>(find.byKey(const Key('editor.text')));
+  return field.controller!.text;
+}
+
+String _expectedNeedle(Matcher matcher) {
+  final description = StringDescription();
+  matcher.describe(description);
+  final text = description.toString();
+  final match = RegExp(r"contains '([^']+)'").firstMatch(text);
+  return match?.group(1) ?? '';
+}
+
+Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+  await _pumpUntil(tester, () => finder.evaluate().isNotEmpty);
+}
+
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 200));
+    if (condition()) return;
+  }
+  fail('Timed out waiting for emulator UI condition');
 }
 
 void _expectEditorText(WidgetTester tester, Matcher matcher) {
