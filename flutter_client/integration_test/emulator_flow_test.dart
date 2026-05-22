@@ -54,15 +54,20 @@ void main() {
 
     expect(find.text('Streaming Playback'), findsOneWidget);
     expect(find.byKey(const Key('player.highlight.rich_text')), findsOneWidget);
+
+    final wavFile = File('${tempDir.path}/just_read_it_voice_sample.wav');
+    await _pumpUntil(
+      tester,
+      wavFile.existsSync,
+      timeout: const Duration(seconds: 60),
+    );
+    _validateWav(await wavFile.readAsBytes());
+
     if (Platform.isAndroid) {
       await binding.convertFlutterSurfaceToImage();
       await tester.pumpAndSettle(const Duration(milliseconds: 500));
     }
     await binding.takeScreenshot('02_player_playback');
-
-    final wavFile = File('${tempDir.path}/just_read_it_voice_sample.wav');
-    expect(await wavFile.exists(), isTrue);
-    _validateWav(await wavFile.readAsBytes());
   });
 }
 
