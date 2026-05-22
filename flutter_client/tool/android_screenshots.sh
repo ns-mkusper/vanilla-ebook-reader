@@ -37,3 +37,4 @@ test -s build/screenshots/voice_sample_from_emulator.wav
 python3 ../tools/validate_pngs.py \
   build/screenshots/01_txt_import_editor.png \
   build/screenshots/02_player_playback.png
+adb shell am force-stop com.example.just_read_it || true
