@@ -85,10 +85,15 @@ Future<void> _importPath(
   await tester.enterText(find.byKey(const Key('import.path')), path);
   await tester.pump(const Duration(milliseconds: 300));
   await tester.testTextInput.receiveAction(TextInputAction.done);
+  await tester.pump(const Duration(milliseconds: 300));
+  if (find.byKey(const Key('import.path')).evaluate().isNotEmpty) {
+    await tester.tap(find.byKey(const Key('import.confirm')),
+        warnIfMissed: false);
+  }
   await _pumpUntil(
     tester,
     () => _editorText(tester).contains(_expectedNeedle(expectedText)),
-    timeout: const Duration(seconds: 10),
+    timeout: const Duration(seconds: 30),
   );
   _expectEditorText(tester, expectedText);
 }

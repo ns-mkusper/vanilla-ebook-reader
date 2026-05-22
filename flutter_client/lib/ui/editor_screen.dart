@@ -246,6 +246,13 @@ class _ImportPathDialog extends StatefulWidget {
 
 class _ImportPathDialogState extends State<_ImportPathDialog> {
   final TextEditingController _pathController = TextEditingController();
+  var _submitted = false;
+
+  void _submit([String? value]) {
+    if (_submitted) return;
+    _submitted = true;
+    Navigator.of(context).pop((value ?? _pathController.text).trim());
+  }
 
   @override
   void dispose() {
@@ -262,7 +269,8 @@ class _ImportPathDialogState extends State<_ImportPathDialog> {
         controller: _pathController,
         autofocus: true,
         textInputAction: TextInputAction.done,
-        onSubmitted: (value) => Navigator.of(context).pop(value),
+        onEditingComplete: _submit,
+        onSubmitted: _submit,
         decoration: const InputDecoration(
           labelText: 'File path',
           hintText: '/path/to/book.epub',
@@ -275,7 +283,7 @@ class _ImportPathDialogState extends State<_ImportPathDialog> {
         ),
         FilledButton(
           key: const Key('import.confirm'),
-          onPressed: () => Navigator.of(context).pop(_pathController.text),
+          onPressed: _submit,
           child: const Text('Import'),
         ),
       ],
