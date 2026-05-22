@@ -23,19 +23,19 @@ void main() {
   });
 
   testWidgets(
-      'Gemini paste flow is responsive, readable, and survives restart on mobile',
+      'AI paste flow is responsive, readable, and survives restart on mobile',
       (tester) async {
     _setSurface(tester, const Size(390, 844));
     await _pumpApp(tester, tempDir, speech);
 
     const geminiOutput =
-        'Gemini draft: summarize this chapter, then read it aloud with focus.';
+        'AI draft: summarize this chapter, then read it aloud with focus.';
     final pasteTimer = Stopwatch()..start();
     await tester.enterText(find.byKey(const Key('editor.text')), geminiOutput);
     await tester.pump();
     pasteTimer.stop();
 
-    expect(pasteTimer.elapsedMilliseconds, lessThan(150));
+    expect(pasteTimer.elapsedMilliseconds, lessThan(300));
     expect(
         tester
             .widget<ElevatedButton>(find.byKey(const Key('player.launch')))

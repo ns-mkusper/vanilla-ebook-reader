@@ -12,6 +12,25 @@ import 'package:path_provider/path_provider.dart';
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('txt import via emulator UI produces editor screenshot',
+      (tester) async {
+    final tempDir = await getTemporaryDirectory();
+    final txtFile = File('${tempDir.path}/copyright_free_notes.txt');
+    await txtFile.writeAsString(_txtSample, flush: true);
+
+    await app.main();
+    await tester.pump(const Duration(seconds: 2));
+    await _dismissSystemSettling(tester);
+
+    await _importPath(tester, txtFile.path, contains('TXT import fixture'));
+
+    if (Platform.isAndroid) {
+      await binding.convertFlutterSurfaceToImage();
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    }
+    await binding.takeScreenshot('01_txt_import_editor');
+  });
+
   testWidgets('full emulator import persistence voice playback flow',
       (tester) async {
     final tempDir = await getTemporaryDirectory();
@@ -25,9 +44,6 @@ void main() {
     await _dismissSystemSettling(tester);
 
     await _importPath(tester, txtFile.path, contains('TXT import fixture'));
-
-    await binding.takeScreenshot('01_txt_import_editor');
-
     await _importPath(tester, epubFile.path, contains('EPUB import fixture'));
 
     // Simulate an app restart in the same on-device process and verify the
@@ -59,7 +75,7 @@ void main() {
     expect(find.byKey(const Key('player.highlight.rich_text')), findsOneWidget);
     if (Platform.isAndroid) {
       await binding.convertFlutterSurfaceToImage();
-      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
     }
     await binding.takeScreenshot('02_player_playback');
 
@@ -80,7 +96,7 @@ Future<void> _importPath(
   Matcher expectedText,
 ) async {
   await tester.ensureVisible(find.byKey(const Key('document.import')));
-  await tester.tap(find.byKey(const Key('document.import')));
+  await tester.tap(find.byKey(const Key('document.import')), warnIfMissed: false);
   await _pumpUntilFound(tester, find.byKey(const Key('import.path')));
   await tester.enterText(find.byKey(const Key('import.path')), path);
   await tester.pump(const Duration(milliseconds: 300));
