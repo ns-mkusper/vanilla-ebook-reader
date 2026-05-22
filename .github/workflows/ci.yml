@@ -93,16 +93,16 @@ jobs:
           fi
           if [[ "$MAIN_ACTIVITY" == *.kt ]]; then
             cat > "$MAIN_ACTIVITY" <<'KOTLIN'
-package com.example.just_read_it
+          package com.example.just_read_it
 
-class MainActivity : com.ryanheise.audioservice.AudioServiceActivity()
-KOTLIN
+          class MainActivity : com.ryanheise.audioservice.AudioServiceActivity()
+          KOTLIN
           else
             cat > "$MAIN_ACTIVITY" <<'JAVA'
-package com.example.just_read_it;
+          package com.example.just_read_it;
 
-public class MainActivity extends com.ryanheise.audioservice.AudioServiceActivity {}
-JAVA
+          public class MainActivity extends com.ryanheise.audioservice.AudioServiceActivity {}
+          JAVA
           fi
       - name: Install Rust Android target
         run: rustup target add x86_64-linux-android
