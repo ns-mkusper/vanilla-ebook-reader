@@ -122,6 +122,12 @@ jobs:
           for permission in permissions:
               if permission not in text:
                   text = text.replace('<application', f'{permission}\n    <application', 1)
+          if 'android:usesCleartextTraffic=' not in text:
+              text = text.replace(
+                  '<application',
+                  '<application android:usesCleartextTraffic="true"',
+                  1,
+              )
           service_block = '''
                   <service
                       android:name="com.ryanheise.audioservice.AudioService"
