@@ -63,10 +63,10 @@ void main() {
     expect(restoredField.controller!.text, geminiOutput);
   });
 
-  testWidgets('uses the procedural voice for fast playback validation',
+  testWidgets('uses the default Qwen-TTS voice for fast playback validation',
       (tester) async {
     await _pumpApp(tester, tempDir, speech);
-    expect(find.text('Orbit (procedural)'), findsOneWidget);
+    expect(find.text('Qwen-TTS Cherry'), findsOneWidget);
     await tester.enterText(
         find.byKey(const Key('editor.text')), 'Voice check text.');
     await tester.pump();

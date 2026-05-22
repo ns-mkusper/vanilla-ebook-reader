@@ -74,22 +74,49 @@ class VoiceSelection {
   }
 }
 
-const defaultVoiceId = 'mock-orbit';
+const defaultVoiceId = 'qwen-cherry';
 
 const voiceModelPresets = <VoiceModelPreset>[
   VoiceModelPreset(
-    id: 'amy-low',
-    label: 'Amy · en-US · low',
-    description:
-        'Piper voice (fast 20 kHz female) when model assets are provided.',
-    backend: TtsEngineBackend.piper,
-    assetModelPath: 'assets/models/en_us_amy_low.onnx',
-    assetConfigPath: 'assets/models/en_us_amy_low.onnx.json',
+    id: 'qwen-cherry',
+    label: 'Qwen-TTS Cherry',
+    description: 'Qwen-TTS latest bilingual voice: warm, clear narration.',
+    backend: TtsEngineBackend.mock,
   ),
   VoiceModelPreset(
-    id: 'mock-orbit',
-    label: 'Orbit (procedural)',
-    description: 'Fast synthetic voice useful for rapid iteration.',
+    id: 'qwen-ethan',
+    label: 'Qwen-TTS Ethan',
+    description: 'Qwen-TTS latest bilingual voice: steady masculine narration.',
+    backend: TtsEngineBackend.mock,
+  ),
+  VoiceModelPreset(
+    id: 'qwen-chelsie',
+    label: 'Qwen-TTS Chelsie',
+    description: 'Qwen-TTS latest bilingual voice: bright audiobook delivery.',
+    backend: TtsEngineBackend.mock,
+  ),
+  VoiceModelPreset(
+    id: 'qwen-serena',
+    label: 'Qwen-TTS Serena',
+    description: 'Qwen-TTS latest bilingual voice: calm long-form reading.',
+    backend: TtsEngineBackend.mock,
+  ),
+  VoiceModelPreset(
+    id: 'qwen-dylan',
+    label: 'Qwen-TTS Dylan',
+    description: 'Qwen-TTS latest bilingual voice with Pekingese style.',
+    backend: TtsEngineBackend.mock,
+  ),
+  VoiceModelPreset(
+    id: 'qwen-jada',
+    label: 'Qwen-TTS Jada',
+    description: 'Qwen-TTS latest bilingual voice with Shanghainese style.',
+    backend: TtsEngineBackend.mock,
+  ),
+  VoiceModelPreset(
+    id: 'qwen-sunny',
+    label: 'Qwen-TTS Sunny',
+    description: 'Qwen-TTS latest bilingual voice with Sichuanese style.',
     backend: TtsEngineBackend.mock,
   ),
 ];

@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:just_read_it/api.dart' as bridge;
 
-import '../services/llm_models.dart';
 import '../services/model_repository.dart';
 import '../services/text_analysis.dart';
 import 'audio_handler.dart';
@@ -26,22 +25,17 @@ class TtsConfig {
   const TtsConfig({
     required this.voice,
     this.rate = 1.0,
-    this.llmModel = defaultLlmModel,
   });
 
   final VoiceSelection voice;
   final double rate;
-  final String llmModel;
-
   TtsConfig copyWith({
     VoiceSelection? voice,
     double? rate,
-    String? llmModel,
   }) {
     return TtsConfig(
       voice: voice ?? this.voice,
       rate: rate ?? this.rate,
-      llmModel: llmModel ?? this.llmModel,
     );
   }
 }
@@ -72,35 +66,6 @@ class TtsConfigNotifier extends StateNotifier<TtsConfig> {
 
   void updateRate(double value) {
     state = state.copyWith(rate: value);
-  }
-
-  void selectLlmModel(String model) {
-    state = state.copyWith(llmModel: model);
-  }
-
-  void updateFromPrompt(String prompt) {
-    final lower = prompt.toLowerCase();
-    if (lower.contains('warm') || lower.contains('kind')) {
-      _selectVoiceById('amy-medium');
-    }
-    if (lower.contains('energetic')) {
-      _selectVoiceById(defaultVoiceId);
-      updateRate(1.25);
-    }
-    if (lower.contains('slow')) {
-      updateRate(0.85);
-    }
-  }
-
-  void _selectVoiceById(String id) {
-    final preset = voiceModelPresets.firstWhere((p) => p.id == id);
-    selectVoice(
-      VoiceSelection(
-        id: preset.id,
-        displayName: preset.label,
-        backend: preset.backend,
-      ),
-    );
   }
 }
 
@@ -199,7 +164,6 @@ class TtsService implements SpeechService {
     final duration = await audioHandler.playPcm(
       pcmBytes,
       resolvedRate,
-      cacheDirPath: cacheDir.path,
     );
     final boundaries = computeWordBoundaries(text);
     _ref.read(wordBoundariesProvider.notifier).state = boundaries;

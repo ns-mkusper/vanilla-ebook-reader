@@ -3,8 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../genui/components.dart';
-import '../genui/panel.dart';
+import 'components.dart';
 import '../services/document_repository.dart';
 import '../services/text_analysis.dart';
 import '../services/tts_service.dart';
@@ -95,13 +94,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Just Read It'),
-        actions: [
-          IconButton(
-            tooltip: 'GenUI assistant',
-            icon: const Icon(Icons.smart_toy),
-            onPressed: () => _showGenUiSheet(),
-          ),
-        ],
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
@@ -163,8 +155,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
               ),
               const SizedBox(height: 16),
               const ModelSelectorCard(),
-              const SizedBox(height: 12),
-              const LlmModelDropdown(),
               const SizedBox(height: 12),
               const SpeedSlider(),
               const SizedBox(height: 8),
@@ -234,17 +224,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       _hydrating = false;
     });
     await _saveCurrentDraft();
-  }
-
-  Future<void> _showGenUiSheet() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => const FractionallySizedBox(
-        heightFactor: 0.9,
-        child: GenUiPanel(),
-      ),
-    );
   }
 
   Future<void> _launchPlayer(BuildContext context) async {

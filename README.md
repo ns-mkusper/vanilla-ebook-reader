@@ -7,15 +7,15 @@ Highlights:
 - **Ebook and text-first workflow** – bring in long-form reading material, paste text, or dictate text and stream it immediately through the integrated player.
 - **Graphical read-aloud experience** – follow along as each word is highlighted in sync with generated speech.
 - **Background playback** – `audio_service`/`just_audio` keep narration active with Android foreground notifications and iOS `UIBackgroundModes = audio`.
-- **Voice and LLM controls** – select between the bundled Piper preset or procedural mock voice, and drive UI tuning via GenUI + Gemini models.
-- **Offline voice asset** – the low-tier `en_us_amy_low` Piper model is packaged under `assets/`, ensuring speech synthesis without network access.
+- **Qwen-TTS voice presets** – choose from the latest Qwen-TTS voice names used by the app’s fast local synthesis preview path.
+- **Persistent imports** – import TXT/EPUB content, keep the editable text between app restarts, and resume read-aloud quickly.
 
 The repository is organized as a split Flutter/Rust workspace so engines, bindings, and UI can evolve independently.
 
 ## Layout
 
 - `rust_core/`: Streaming synthesis backend with swappable engines (Piper-ready scaffolding today) exposed over Flutter Rust Bridge.
-- `flutter_client/`: Flutter UI + background audio service integrating GenUI-driven configuration, Riverpod state, and the bridge bindings.
+- `flutter_client/`: Flutter UI + background audio service integrating document import, Riverpod state, and the bridge bindings.
 - `tools/`: Project automation (`build_all.sh`) plus local tool stubs to unblock codegen in containerized environments.
 
 ## Prerequisites
@@ -28,11 +28,6 @@ The repository is organized as a split Flutter/Rust workspace so engines, bindin
   cargo install flutter_rust_bridge_codegen --locked
   ```
 
-- (Optional) Gemini access key for GenUI orchestration:
-
-  ```bash
-  flutter run --dart-define=GENAI_API_KEY=your_key
-  ```
 
 ## Bootstrap
 
@@ -70,12 +65,9 @@ The repository is organized as a split Flutter/Rust workspace so engines, bindin
    flutter build apk --debug
    ```
 
-## GenUI & Voice Models
+## Voice Models
 
-- **GenUI SDK**: The configuration drawer (robot icon) is powered by `genui` + `genui_google_generative_ai`. Provide a Gemini key through `--dart-define=GENAI_API_KEY=...` to let the agent call `updateTtsPreferences`; otherwise it runs in offline echo mode.
-- **LLM selection**: The editor exposes a dropdown for the GenUI LLM. Internally the selection is fed into the agent provider so Gemini requests honor the chosen model.
-- **Traditional TTS**: Selecting the “Amy (en-US)” preset copies the bundled Piper `.onnx`/`.json` pair (`en_us_amy_low`) into `ApplicationSupportDirectory/voices/amy-low`. The low-tier model boots quickly, and the Rust core feeds it through `piper-rs` + ONNX Runtime, streaming PCM back to Flutter along with per-chunk indices for word highlighting.
-- **LLM vs. Procedural**: A mock “Orbit” voice remains available for instant previews without the ONNX runtime.
+- **Qwen-TTS presets**: The UI exposes Qwen-TTS latest voice presets (Cherry, Ethan, Chelsie, Serena, Dylan, Jada, and Sunny) for the read-aloud workflow. The current offline preview engine validates the app pipeline without network credentials.
 - **Background playback**: Android ships the `com.ryanheise.audioservice.AudioService` foreground service plus the required `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permission, while iOS has `UIBackgroundModes = audio`. Nothing else is needed—`AudioServiceConfig` already advertises the persistent notification on Android and `just_audio` keeps the shared session alive on iOS.
 
 ## Tooling

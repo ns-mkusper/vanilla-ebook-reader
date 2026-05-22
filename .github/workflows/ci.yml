@@ -114,7 +114,7 @@ jobs:
           cargo ndk -t x86_64 \
             -o ../flutter_client/android/app/src/main/jniLibs \
             build --no-default-features --features bridge
-      - name: Capture screenshots and voice sample on Android emulator
+      - name: Run full emulator UI flow
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
@@ -123,8 +123,10 @@ jobs:
           profile: pixel_6
           emulator-boot-timeout: 1200
           working-directory: flutter_client
-          script: bash tool/android_screenshots.sh
-      - name: Upload emulator screenshots
+          script: |
+            bash tool/android_screenshots.sh
+            bash tool/check_no_system_dialogs.sh
+      - name: Upload emulator artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:

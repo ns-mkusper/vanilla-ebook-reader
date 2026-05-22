@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
@@ -25,34 +24,22 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<PlaybackEvent>? _eventSub;
   MediaItem? _currentItem;
-  File? _lastTempFile;
 
   Future<Duration> playPcm(
     Uint8List pcmBytes,
-    int sampleRate, {
-    required String cacheDirPath,
-  }) async {
+    int sampleRate,
+  ) async {
     if (pcmBytes.isEmpty || sampleRate <= 0) {
       return Duration.zero;
     }
 
     final wavBytes = _buildWavBytes(pcmBytes, sampleRate);
-    final tempDir = Directory(cacheDirPath);
-    if (!tempDir.existsSync()) {
-      tempDir.createSync(recursive: true);
-    }
-    await _cleanupTempFile();
-    final tempFile = File(
-      '${tempDir.path}/tts_${DateTime.now().microsecondsSinceEpoch}.wav',
-    );
-    await tempFile.writeAsBytes(wavBytes, flush: true);
-    _lastTempFile = tempFile;
-    final uri = Uri.file(tempFile.path);
+    final source = _MemoryAudioSource(wavBytes);
     final duration = Duration(
       milliseconds: (pcmBytes.length / 2 / sampleRate * 1000).round(),
     );
     _currentItem = MediaItem(
-      id: uri.toString(),
+      id: 'memory://just-read-it/tts-${DateTime.now().microsecondsSinceEpoch}.wav',
       album: 'Just Read It',
       title: 'Read-Aloud Playback',
       duration: duration,
@@ -60,7 +47,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     mediaItem.add(_currentItem);
 
     await _player.stop();
-    await _player.setAudioSource(AudioSource.uri(uri));
+    await _player.setAudioSource(source);
     unawaited(_player.play());
     return duration;
   }
@@ -77,7 +64,6 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> stop() async {
     await _player.stop();
     await _eventSub?.cancel();
-    await _cleanupTempFile();
     await super.stop();
   }
 
@@ -124,21 +110,6 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
       case ProcessingState.completed:
         return AudioProcessingState.completed;
     }
-  }
-
-  Future<void> _cleanupTempFile() async {
-    final file = _lastTempFile;
-    if (file == null) {
-      return;
-    }
-    if (await file.exists()) {
-      try {
-        await file.delete();
-      } catch (_) {
-        // Best effort cache cleanup.
-      }
-    }
-    _lastTempFile = null;
   }
 
   Uint8List _buildWavBytes(Uint8List pcmBytes, int sampleRate) {
@@ -197,5 +168,28 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     writeString('data');
     writeUint32(dataLength);
     return Uint8List.fromList(builder.takeBytes());
+  }
+}
+
+// ignore: experimental_member_use
+class _MemoryAudioSource extends StreamAudioSource {
+  _MemoryAudioSource(this.bytes);
+
+  final Uint8List bytes;
+
+  @override
+  // ignore: experimental_member_use
+  Future<StreamAudioResponse> request([int? start, int? end]) async {
+    final resolvedStart = start ?? 0;
+    final resolvedEnd = end ?? bytes.length;
+    final slice = bytes.sublist(resolvedStart, resolvedEnd);
+    // ignore: experimental_member_use
+    return StreamAudioResponse(
+      sourceLength: bytes.length,
+      contentLength: slice.length,
+      offset: resolvedStart,
+      stream: Stream.value(slice),
+      contentType: 'audio/wav',
+    );
   }
 }

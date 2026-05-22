@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../services/llm_models.dart';
 import '../services/model_repository.dart';
 import '../services/tts_service.dart';
 
@@ -29,62 +28,18 @@ class ModelSelectorCard extends ConsumerWidget {
     if (preset == null || !context.mounted) {
       return;
     }
-    final repo = ref.read(modelRepositoryProvider);
     final notifier = ref.read(ttsConfigProvider.notifier);
-    Future<VoiceSelection> resolve() async {
-      if (preset.backend == TtsEngineBackend.piper) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => const Dialog(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Preparing Piper voice...'),
-                ],
-              ),
-            ),
-          ),
-        );
-        try {
-          final selection = await repo.ensurePresetReady(preset);
-          if (context.mounted) {
-            Navigator.of(context, rootNavigator: true).pop();
-          }
-          return selection;
-        } catch (err) {
-          if (context.mounted) {
-            Navigator.of(context, rootNavigator: true).pop();
-          }
-          rethrow;
-        }
-      }
-      return VoiceSelection(
-        id: preset.id,
-        displayName: preset.label,
-        backend: preset.backend,
-        modelPath: preset.id,
+    final selection = VoiceSelection(
+      id: preset.id,
+      displayName: preset.label,
+      backend: preset.backend,
+      modelPath: preset.id,
+    );
+    notifier.selectVoice(selection);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Voice set to ${selection.displayName}')),
       );
-    }
-
-    try {
-      final selection = await resolve();
-      notifier.selectVoice(selection);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Voice set to ${selection.displayName}')),
-        );
-      }
-    } catch (err) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Voice install failed: $err')),
-        );
-      }
     }
   }
 }
@@ -100,8 +55,10 @@ class _VoicePresetSheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 12),
-          const Text('Select a voice',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Select a voice',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           Flexible(
             child: ListView(
@@ -122,38 +79,6 @@ class _VoicePresetSheet extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class LlmModelDropdown extends ConsumerWidget {
-  const LlmModelDropdown({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(ttsConfigProvider);
-    return DropdownButtonFormField<String>(
-      isExpanded: true,
-      decoration: const InputDecoration(
-        labelText: 'GenUI LLM Model',
-        border: OutlineInputBorder(),
-      ),
-      initialValue: config.llmModel,
-      items: [
-        for (final option in llmModelOptions)
-          DropdownMenuItem(
-            value: option.id,
-            child: Text(
-              option.label,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-      ],
-      onChanged: (value) {
-        if (value != null) {
-          ref.read(ttsConfigProvider.notifier).selectLlmModel(value);
-        }
-      },
     );
   }
 }
