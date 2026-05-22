@@ -16,7 +16,16 @@ if grep -Eq "Unable to bind to AudioService|PlatformException|MissingPluginExcep
   exit 1
 fi
 
-WAV_PATH="cache/just_read_it_voice_sample.wav"
+if ! grep -Eq "JRI_PLAYBACK_STARTED|JRI_PLAYBACK_COMPLETED" build/screenshots/flutter-run.log; then
+  echo "Native media player never proved playback progress" >&2
+  exit 1
+fi
+if ! grep -q "JRI_PLAYBACK_WAV_READY" build/screenshots/flutter-run.log; then
+  echo "Playback-sourced WAV was not exported after native playback" >&2
+  exit 1
+fi
+
+WAV_PATH="cache/just_read_it_playback_sample.wav"
 adb exec-out run-as com.example.just_read_it cat "$WAV_PATH" > build/screenshots/voice_sample_from_emulator.wav
 if ! grep -q '^RIFF' build/screenshots/voice_sample_from_emulator.wav; then
   echo "Failed to pull exported emulator WAV from app cache" >&2

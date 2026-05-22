@@ -70,7 +70,7 @@ void main() {
     expect(find.text('Streaming Playback'), findsOneWidget);
     expect(find.byKey(const Key('player.highlight.rich_text')), findsOneWidget);
 
-    final wavFile = File('${tempDir.path}/just_read_it_voice_sample.wav');
+    final wavFile = File('${tempDir.path}/just_read_it_playback_sample.wav');
     await _pumpUntil(
       tester,
       wavFile.existsSync,

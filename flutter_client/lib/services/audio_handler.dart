@@ -3,8 +3,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
 
 final audioHandlerProvider = Provider<Future<TtsAudioHandler>>((ref) async {
   return AudioService.init(
@@ -45,6 +47,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
       id: 'memory://just-read-it/tts-${DateTime.now().microsecondsSinceEpoch}.wav',
       duration: duration,
       speed: speed,
+      playbackExportBytes: wavBytes,
     );
     return duration;
   }
@@ -59,6 +62,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
       id: file.uri.toString(),
       duration: duration,
       speed: speed,
+      playbackExportFile: file,
     );
     return duration;
   }
@@ -68,6 +72,8 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     required String id,
     required Duration duration,
     required double speed,
+    Uint8List? playbackExportBytes,
+    File? playbackExportFile,
   }) async {
     _currentItem = MediaItem(
       id: id,
@@ -81,6 +87,59 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     await _player.setSpeed(speed.clamp(0.5, 3.0));
     await _player.setAudioSource(source);
     unawaited(_player.play());
+    await _waitForNativePlaybackStarted(duration);
+    await _exportPlaybackAudioIfRequested(
+      sourceFile: playbackExportFile,
+      sourceBytes: playbackExportBytes,
+    );
+  }
+
+  Future<void> _waitForNativePlaybackStarted(Duration duration) async {
+    final requiredProgress = duration < const Duration(seconds: 1)
+        ? const Duration(milliseconds: 100)
+        : const Duration(milliseconds: 500);
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+    while (DateTime.now().isBefore(deadline)) {
+      if (_player.playing && _player.position >= requiredProgress) {
+        debugPrint(
+          'JRI_PLAYBACK_STARTED position=${_player.position.inMilliseconds}ms '
+          'speed=${_player.speed}',
+        );
+        return;
+      }
+      if (_player.processingState == ProcessingState.completed &&
+          _player.position > Duration.zero) {
+        debugPrint(
+          'JRI_PLAYBACK_COMPLETED position=${_player.position.inMilliseconds}ms '
+          'speed=${_player.speed}',
+        );
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    throw StateError(
+      'Native playback did not advance beyond '
+      '${requiredProgress.inMilliseconds}ms.',
+    );
+  }
+
+  Future<void> _exportPlaybackAudioIfRequested({
+    File? sourceFile,
+    Uint8List? sourceBytes,
+  }) async {
+    const shouldExport = bool.fromEnvironment('JRI_EXPORT_TTS_WAV');
+    if (!shouldExport) return;
+    final cacheDir = await getTemporaryDirectory();
+    final file = File('${cacheDir.path}/just_read_it_playback_sample.wav');
+    if (sourceFile != null) {
+      await sourceFile.copy(file.path);
+    } else if (sourceBytes != null) {
+      await file.writeAsBytes(sourceBytes, flush: true);
+    } else {
+      throw StateError('No playback audio source available to export.');
+    }
+    debugPrint('JRI_PLAYBACK_WAV_PATH=${file.path}');
+    debugPrint('JRI_PLAYBACK_WAV_READY');
   }
 
   Stream<Duration> positionStream() => _player.positionStream;
