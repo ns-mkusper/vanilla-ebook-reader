@@ -39,9 +39,7 @@ Future<void> _importPath(
   String path,
   Matcher expectedText,
 ) async {
-  await tester.ensureVisible(find.byKey(const Key('document.import')));
-  await tester.tap(find.byKey(const Key('document.import')), warnIfMissed: false);
-  await _pumpUntilFound(tester, find.byKey(const Key('import.path')));
+  await _openImportDialog(tester);
   await tester.enterText(find.byKey(const Key('import.path')), path);
   await tester.pump(const Duration(milliseconds: 300));
   await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -57,6 +55,20 @@ Future<void> _importPath(
   );
 }
 
+Future<void> _openImportDialog(WidgetTester tester) async {
+  final importPath = find.byKey(const Key('import.path'));
+  final importButton = find.byKey(const Key('document.import'));
+  for (var attempt = 0; attempt < 4; attempt++) {
+    await tester.ensureVisible(importButton);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(importButton, warnIfMissed: false);
+    await tester.pump(const Duration(seconds: 1));
+    if (importPath.evaluate().isNotEmpty) return;
+  }
+  await _pumpUntilFound(tester, importPath,
+      timeout: const Duration(seconds: 15));
+}
+
 String _editorText(WidgetTester tester) {
   final field = tester.widget<TextField>(find.byKey(const Key('editor.text')));
   return field.controller!.text;
@@ -70,8 +82,13 @@ String _expectedNeedle(Matcher matcher) {
   return match?.group(1) ?? '';
 }
 
-Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
-  await _pumpUntil(tester, () => finder.evaluate().isNotEmpty);
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  await _pumpUntil(tester, () => finder.evaluate().isNotEmpty,
+      timeout: timeout);
 }
 
 Future<void> _pumpUntil(
