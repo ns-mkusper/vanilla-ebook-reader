@@ -104,6 +104,47 @@ jobs:
           public class MainActivity extends com.ryanheise.audioservice.AudioServiceActivity {}
           JAVA
           fi
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          if 'xmlns:tools=' not in text:
+              text = text.replace(
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools">',
+              )
+          permissions = [
+              '<uses-permission android:name="android.permission.WAKE_LOCK" />',
+              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />',
+          ]
+          for permission in permissions:
+              if permission not in text:
+                  text = text.replace('<application', f'{permission}\n    <application', 1)
+          service_block = '''
+                  <service
+                      android:name="com.ryanheise.audioservice.AudioService"
+                      android:exported="true"
+                      android:foregroundServiceType="mediaPlayback"
+                      tools:ignore="Instantiatable">
+                      <intent-filter>
+                          <action android:name="android.media.browse.MediaBrowserService" />
+                      </intent-filter>
+                  </service>
+                  <receiver
+                      android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+                      android:exported="true"
+                      tools:ignore="Instantiatable">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MEDIA_BUTTON" />
+                      </intent-filter>
+                  </receiver>
+          '''
+          if 'com.ryanheise.audioservice.AudioService' not in text:
+              text = text.replace('    </application>', service_block + '    </application>')
+          manifest.write_text(text)
+          PY
       - name: Install Rust Android target
         run: rustup target add x86_64-linux-android
       - name: Install cargo-ndk
