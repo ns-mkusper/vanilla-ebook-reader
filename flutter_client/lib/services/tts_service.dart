@@ -130,7 +130,6 @@ class TtsService implements SpeechService {
     final repo = _ref.read(modelRepositoryProvider);
     final config = _ref.read(ttsConfigProvider);
     final notifier = _ref.read(ttsConfigProvider.notifier);
-    final audioHandler = await _ref.read(audioHandlerProvider);
 
     var voice = await repo.ensureSelectionReady(config.voice);
     notifier.hydrateVoice(voice);
@@ -193,6 +192,7 @@ class TtsService implements SpeechService {
       resolvedRate,
       cacheDirPath: cacheDir.path,
     );
+    final audioHandler = await _ref.read(audioHandlerProvider);
     final duration = await audioHandler.playPcm(
       pcmBytes,
       resolvedRate,
