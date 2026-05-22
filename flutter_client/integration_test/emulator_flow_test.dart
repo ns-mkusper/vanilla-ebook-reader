@@ -84,8 +84,7 @@ Future<void> _importPath(
   await _pumpUntilFound(tester, find.byKey(const Key('import.path')));
   await tester.enterText(find.byKey(const Key('import.path')), path);
   await tester.pump(const Duration(milliseconds: 300));
-  await tester.tap(find.byKey(const Key('import.confirm')),
-      warnIfMissed: false);
+  await tester.testTextInput.receiveAction(TextInputAction.done);
   await _pumpUntil(
     tester,
     () => _editorText(tester).contains(_expectedNeedle(expectedText)),

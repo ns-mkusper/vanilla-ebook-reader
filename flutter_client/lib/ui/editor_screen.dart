@@ -261,6 +261,8 @@ class _ImportPathDialogState extends State<_ImportPathDialog> {
         key: const Key('import.path'),
         controller: _pathController,
         autofocus: true,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (value) => Navigator.of(context).pop(value),
         decoration: const InputDecoration(
           labelText: 'File path',
           hintText: '/path/to/book.epub',
