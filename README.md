@@ -7,7 +7,7 @@ Highlights:
 - **Ebook and text-first workflow** – bring in long-form reading material, paste text, or dictate text and stream it immediately through the integrated player.
 - **Graphical read-aloud experience** – follow along as each word is highlighted in sync with generated speech.
 - **Background playback** – `audio_service`/`just_audio` keep narration active with Android foreground notifications and iOS `UIBackgroundModes = audio`.
-- **Qwen-TTS voice presets** – choose from the latest Qwen-TTS voice names used by the app’s fast local synthesis preview path.
+- **Practical real-speech voices** – use the Android system TTS engine by default, with a Classic Flite option when a Flite Android TTS engine is installed and Piper-ready scaffolding for future bundled/downloaded neural voices.
 - **Persistent imports** – import TXT/EPUB content, keep the editable text between app restarts, and resume read-aloud quickly.
 
 The repository is organized as a split Flutter/Rust workspace so engines, bindings, and UI can evolve independently.
@@ -31,7 +31,7 @@ The repository is organized as a split Flutter/Rust workspace so engines, bindin
 
 ## Bootstrap
 
-1. Install Flutter/Dart packages and copy the bundled Piper voice into the writable App Support directory (first run only):
+1. Install Flutter/Dart packages:
 
    ```bash
    cd flutter_client
@@ -67,8 +67,10 @@ The repository is organized as a split Flutter/Rust workspace so engines, bindin
 
 ## Voice Models
 
-- **Qwen-TTS presets**: The UI exposes Qwen-TTS latest voice presets (Cherry, Ethan, Chelsie, Serena, Dylan, Jada, and Sunny) for the read-aloud workflow. The current offline preview engine validates the app pipeline without network credentials.
-- **Background playback**: Android ships the `com.ryanheise.audioservice.AudioService` foreground service plus the required `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permission, while iOS has `UIBackgroundModes = audio`. Nothing else is needed—`AudioServiceConfig` already advertises the persistent notification on Android and `just_audio` keeps the shared session alive on iOS.
+- **Android System Voice**: The default production path synthesizes real speech to an audio file using the platform TTS engine, then plays that generated audio through the app media player.
+- **Classic Flite**: Selectable as an opt-in retro voice. On Android it attempts to use a Flite TTS engine package when installed, and otherwise falls back to the normal system TTS engine so playback remains reliable.
+- **Piper-ready neural path**: Rust still contains Piper scaffolding for future bundled or downloadable neural voices without pretending large Qwen-class models are practical to ship inside the APK.
+- **Background playback**: Android ships the `com.ryanheise.audioservice.AudioService` foreground service plus the required `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permission, while iOS has `UIBackgroundModes = audio`. `AudioServiceConfig` advertises the persistent notification and `just_audio` provides play/pause/seek plus speed control.
 
 ## Tooling
 

@@ -30,6 +30,24 @@ if ! grep -q '^RIFF' build/screenshots/voice_sample_from_emulator.wav; then
   exit 1
 fi
 python3 ../tools/validate_wav.py build/screenshots/voice_sample_from_emulator.wav
+python3 -m pip install --user vosk==0.3.45
+MODEL_DIR="build/screenshots/vosk-model-small-en-us-0.15"
+if [ ! -d "$MODEL_DIR" ]; then
+  curl -L --retry 3 -o build/screenshots/vosk-model.zip \
+    https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+  python3 - <<'PY'
+import zipfile
+from pathlib import Path
+zip_path = Path('build/screenshots/vosk-model.zip')
+with zipfile.ZipFile(zip_path) as zf:
+    zf.extractall('build/screenshots')
+PY
+fi
+python3 ../tools/validate_wav_stt.py \
+  build/screenshots/voice_sample_from_emulator.wav \
+  --model "$MODEL_DIR" \
+  --expected "Simple book speech fixture This simple book is a clear test of imported speech Just Read It should restore the document and read every sentence aloud"
+rm -rf "$MODEL_DIR" build/screenshots/vosk-model.zip
 
 test -s build/screenshots/01_txt_import_editor.png
 test -s build/screenshots/02_player_playback.png

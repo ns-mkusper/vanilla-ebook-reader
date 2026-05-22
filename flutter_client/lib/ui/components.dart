@@ -33,7 +33,8 @@ class ModelSelectorCard extends ConsumerWidget {
       id: preset.id,
       displayName: preset.label,
       backend: preset.backend,
-      modelPath: preset.id,
+      modelPath: preset.backend == TtsEngineBackend.piper ? null : preset.id,
+      androidEngine: preset.androidEngine,
     );
     notifier.selectVoice(selection);
     if (context.mounted) {
@@ -94,6 +95,7 @@ class SpeedSlider extends ConsumerWidget {
       children: [
         const Text('Playback Speed'),
         Slider(
+          key: const Key('playback.speed'),
           value: config.rate,
           min: 0.5,
           max: 3.0,
@@ -101,6 +103,31 @@ class SpeedSlider extends ConsumerWidget {
           label: config.rate.toStringAsFixed(2),
           onChanged: (value) =>
               ref.read(ttsConfigProvider.notifier).updateRate(value),
+        ),
+      ],
+    );
+  }
+}
+
+class PitchSlider extends ConsumerWidget {
+  const PitchSlider({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(ttsConfigProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Voice Pitch'),
+        Slider(
+          key: const Key('voice.pitch'),
+          value: config.pitch,
+          min: 0.7,
+          max: 1.4,
+          divisions: 14,
+          label: config.pitch.toStringAsFixed(2),
+          onChanged: (value) =>
+              ref.read(ttsConfigProvider.notifier).updatePitch(value),
         ),
       ],
     );

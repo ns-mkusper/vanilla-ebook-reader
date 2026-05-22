@@ -37,7 +37,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     final effectiveBoundaries =
         boundaries.isEmpty ? computeWordBoundaries(widget.text) : boundaries;
     final config = ref.watch(ttsConfigProvider);
-    final usesPiper = config.voice.backend == TtsEngineBackend.piper;
+    final backendLabel = switch (config.voice.backend) {
+      TtsEngineBackend.piper => 'Neural voice: ${config.voice.displayName}',
+      TtsEngineBackend.fliteClassic =>
+        'Classic voice: ${config.voice.displayName}',
+      TtsEngineBackend.androidSystem =>
+        'System voice: ${config.voice.displayName}',
+    };
     return Scaffold(
       appBar: AppBar(title: const Text('Streaming Playback')),
       body: Padding(
@@ -49,17 +55,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               alignment: Alignment.centerLeft,
               child: Chip(
                 avatar: Icon(
-                  usesPiper ? Icons.graphic_eq : Icons.bolt,
+                  config.voice.backend == TtsEngineBackend.piper
+                      ? Icons.graphic_eq
+                      : Icons.record_voice_over,
                   color: Theme.of(context).colorScheme.onSecondary,
                 ),
-                backgroundColor: usesPiper
-                    ? Theme.of(context).colorScheme.secondary
-                    : Theme.of(context).colorScheme.tertiaryContainer,
-                label: Text(
-                  usesPiper
-                      ? 'Real voice: ${config.voice.displayName}'
-                      : 'Synth preview voice',
-                ),
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                label: Text(backendLabel),
               ),
             ),
             const Text('Live Highlight', key: Key('player.highlight.label')),

@@ -157,6 +157,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
               const ModelSelectorCard(),
               const SizedBox(height: 12),
               const SpeedSlider(),
+              const SizedBox(height: 12),
+              const PitchSlider(),
               const SizedBox(height: 8),
               const ThemeToggle(),
               const SizedBox(height: 24),

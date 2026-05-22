@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
@@ -27,8 +28,9 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
 
   Future<Duration> playPcm(
     Uint8List pcmBytes,
-    int sampleRate,
-  ) async {
+    int sampleRate, {
+    double speed = 1.0,
+  }) async {
     if (pcmBytes.isEmpty || sampleRate <= 0) {
       return Duration.zero;
     }
@@ -38,8 +40,37 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     final duration = Duration(
       milliseconds: (pcmBytes.length / 2 / sampleRate * 1000).round(),
     );
-    _currentItem = MediaItem(
+    await _playSource(
+      source,
       id: 'memory://just-read-it/tts-${DateTime.now().microsecondsSinceEpoch}.wav',
+      duration: duration,
+      speed: speed,
+    );
+    return duration;
+  }
+
+  Future<Duration> playFile(
+    File file, {
+    required Duration duration,
+    double speed = 1.0,
+  }) async {
+    await _playSource(
+      AudioSource.uri(file.uri),
+      id: file.uri.toString(),
+      duration: duration,
+      speed: speed,
+    );
+    return duration;
+  }
+
+  Future<void> _playSource(
+    AudioSource source, {
+    required String id,
+    required Duration duration,
+    required double speed,
+  }) async {
+    _currentItem = MediaItem(
+      id: id,
       album: 'Just Read It',
       title: 'Read-Aloud Playback',
       duration: duration,
@@ -47,9 +78,9 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     mediaItem.add(_currentItem);
 
     await _player.stop();
+    await _player.setSpeed(speed.clamp(0.5, 3.0));
     await _player.setAudioSource(source);
     unawaited(_player.play());
-    return duration;
   }
 
   Stream<Duration> positionStream() => _player.positionStream;
@@ -84,10 +115,12 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     playbackState.add(
       PlaybackState(
         controls: [
+          MediaControl.rewind,
           if (playing) MediaControl.pause else MediaControl.play,
           MediaControl.stop,
+          MediaControl.fastForward,
         ],
-        androidCompactActionIndices: const [0, 1],
+        androidCompactActionIndices: const [0, 1, 3],
         playing: playing,
         processingState: processingState,
         updatePosition: _player.position,

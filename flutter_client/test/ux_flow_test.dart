@@ -63,10 +63,10 @@ void main() {
     expect(restoredField.controller!.text, geminiOutput);
   });
 
-  testWidgets('uses the default Qwen-TTS voice for fast playback validation',
+  testWidgets('uses the default Android system voice for playback validation',
       (tester) async {
     await _pumpApp(tester, tempDir, speech);
-    expect(find.text('Qwen-TTS Cherry'), findsOneWidget);
+    expect(find.text('Android System Voice'), findsOneWidget);
     await tester.enterText(
         find.byKey(const Key('editor.text')), 'Voice check text.');
     await tester.pump();
@@ -79,7 +79,7 @@ void main() {
     await tester.pump();
 
     expect(speech.lastText, 'Voice check text.');
-    expect(find.text('Synth preview voice'), findsOneWidget);
+    expect(find.text('System voice: Android System Voice'), findsOneWidget);
   });
 }
 

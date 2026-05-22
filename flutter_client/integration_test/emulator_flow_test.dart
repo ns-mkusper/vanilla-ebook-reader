@@ -25,7 +25,8 @@ void main() {
     await _dismissSystemSettling(tester);
 
     await _importPath(tester, txtFile.path, contains('TXT import fixture'));
-    await _importPath(tester, epubFile.path, contains('EPUB import fixture'));
+    await _importPath(
+        tester, epubFile.path, contains('Simple book speech fixture'));
 
     // Simulate an app restart in the same on-device process and verify the
     // document restored from device storage, not widget memory.
@@ -36,14 +37,17 @@ void main() {
     final restoredField = tester.widget<TextField>(
       find.byKey(const Key('editor.text')),
     );
-    expect(restoredField.controller!.text, contains('EPUB import fixture'));
+    expect(
+        restoredField.controller!.text, contains('Simple book speech fixture'));
 
-    // Voice selection via actual UI.
+    // Voice selection via actual UI. This exercises the Flite option when a
+    // Flite Android TTS engine is installed and otherwise verifies the app's
+    // fallback to the platform TTS engine without breaking playback.
     await tester.tap(find.text('Voice Model'));
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('Qwen-TTS Ethan').last);
+    await tester.tap(find.text('Classic Flite').last);
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Qwen-TTS Ethan'), findsOneWidget);
+    expect(find.text('Classic Flite'), findsOneWidget);
 
     await tester.tap(find.text('Read Aloud'));
     await tester.pump(const Duration(seconds: 1));
@@ -162,9 +166,9 @@ void _validateWav(Uint8List bytes) {
   final bitsPerSample = data.getUint16(34, Endian.little);
   final dataLength = data.getUint32(40, Endian.little);
   expect(channels, 1);
-  expect(sampleRate, 16000);
+  expect(sampleRate, greaterThanOrEqualTo(8000));
   expect(bitsPerSample, 16);
-  expect(dataLength, greaterThan(16000));
+  expect(dataLength, greaterThan(sampleRate));
 
   var peak = 0;
   for (var i = 44; i + 1 < bytes.length; i += 2) {
@@ -181,9 +185,9 @@ Uint8List _sampleEpubBytes() {
   return _storeOnlyZip({
     'mimetype': 'application/epub+zip',
     'OEBPS/chapter1.xhtml': '''<html><body>
-<h1>EPUB import fixture</h1>
-<p>This copyright-free EPUB validates import through the emulator UI.</p>
-<p>Just Read It should restore and read this document aloud.</p>
+<h1>Simple book speech fixture</h1>
+<p>This simple book is a clear test of imported speech.</p>
+<p>Just Read It should restore the document and read every sentence aloud.</p>
 </body></html>''',
   });
 }

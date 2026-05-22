@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 final modelRepositoryProvider =
     Provider<ModelRepository>((_) => ModelRepository());
 
-enum TtsEngineBackend { mock, piper }
+enum TtsEngineBackend { androidSystem, fliteClassic, piper }
 
 class VoiceModelPreset {
   const VoiceModelPreset({
@@ -20,6 +20,7 @@ class VoiceModelPreset {
     required this.backend,
     this.assetModelPath,
     this.assetConfigPath,
+    this.androidEngine,
   });
 
   final String id;
@@ -28,6 +29,7 @@ class VoiceModelPreset {
   final TtsEngineBackend backend;
   final String? assetModelPath;
   final String? assetConfigPath;
+  final String? androidEngine;
 }
 
 @immutable
@@ -38,6 +40,7 @@ class VoiceSelection {
     required this.backend,
     this.modelPath,
     this.configPath,
+    this.androidEngine,
   });
 
   final String id;
@@ -45,10 +48,12 @@ class VoiceSelection {
   final TtsEngineBackend backend;
   final String? modelPath;
   final String? configPath;
+  final String? androidEngine;
 
   VoiceSelection copyWith({
     String? modelPath,
     String? configPath,
+    String? androidEngine,
   }) {
     return VoiceSelection(
       id: id,
@@ -56,12 +61,19 @@ class VoiceSelection {
       backend: backend,
       modelPath: modelPath ?? this.modelPath,
       configPath: configPath ?? this.configPath,
+      androidEngine: androidEngine ?? this.androidEngine,
     );
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, displayName, backend, modelPath, configPath);
+  int get hashCode => Object.hash(
+        id,
+        displayName,
+        backend,
+        modelPath,
+        configPath,
+        androidEngine,
+      );
 
   @override
   bool operator ==(Object other) {
@@ -70,54 +82,28 @@ class VoiceSelection {
         displayName == other.displayName &&
         backend == other.backend &&
         other.modelPath == modelPath &&
-        other.configPath == configPath;
+        other.configPath == configPath &&
+        other.androidEngine == androidEngine;
   }
 }
 
-const defaultVoiceId = 'qwen-cherry';
+const defaultVoiceId = 'android-system';
 
 const voiceModelPresets = <VoiceModelPreset>[
   VoiceModelPreset(
-    id: 'qwen-cherry',
-    label: 'Qwen-TTS Cherry',
-    description: 'Qwen-TTS latest bilingual voice: warm, clear narration.',
-    backend: TtsEngineBackend.mock,
+    id: 'android-system',
+    label: 'Android System Voice',
+    description:
+        'Uses the device TTS engine, then plays generated audio with the Just Read It media player.',
+    backend: TtsEngineBackend.androidSystem,
   ),
   VoiceModelPreset(
-    id: 'qwen-ethan',
-    label: 'Qwen-TTS Ethan',
-    description: 'Qwen-TTS latest bilingual voice: steady masculine narration.',
-    backend: TtsEngineBackend.mock,
-  ),
-  VoiceModelPreset(
-    id: 'qwen-chelsie',
-    label: 'Qwen-TTS Chelsie',
-    description: 'Qwen-TTS latest bilingual voice: bright audiobook delivery.',
-    backend: TtsEngineBackend.mock,
-  ),
-  VoiceModelPreset(
-    id: 'qwen-serena',
-    label: 'Qwen-TTS Serena',
-    description: 'Qwen-TTS latest bilingual voice: calm long-form reading.',
-    backend: TtsEngineBackend.mock,
-  ),
-  VoiceModelPreset(
-    id: 'qwen-dylan',
-    label: 'Qwen-TTS Dylan',
-    description: 'Qwen-TTS latest bilingual voice with Pekingese style.',
-    backend: TtsEngineBackend.mock,
-  ),
-  VoiceModelPreset(
-    id: 'qwen-jada',
-    label: 'Qwen-TTS Jada',
-    description: 'Qwen-TTS latest bilingual voice with Shanghainese style.',
-    backend: TtsEngineBackend.mock,
-  ),
-  VoiceModelPreset(
-    id: 'qwen-sunny',
-    label: 'Qwen-TTS Sunny',
-    description: 'Qwen-TTS latest bilingual voice with Sichuanese style.',
-    backend: TtsEngineBackend.mock,
+    id: 'flite-classic',
+    label: 'Classic Flite',
+    description:
+        'Small retro Flite-style voice when a Flite Android TTS engine is installed; otherwise falls back to the system voice.',
+    backend: TtsEngineBackend.fliteClassic,
+    androidEngine: 'edu.cmu.cs.speech.tts.flite',
   ),
 ];
 
@@ -129,7 +115,14 @@ class ModelRepository {
       if (selection.modelPath != null) {
         return selection;
       }
-      return selection.copyWith(modelPath: selection.id);
+      final preset = voiceModelPresets.firstWhere((p) => p.id == selection.id);
+      return VoiceSelection(
+        id: preset.id,
+        displayName: preset.label,
+        backend: preset.backend,
+        modelPath: preset.id,
+        androidEngine: preset.androidEngine,
+      );
     }
     if (selection.modelPath != null && selection.configPath != null) {
       return selection;
@@ -157,6 +150,7 @@ class ModelRepository {
         displayName: preset.label,
         backend: preset.backend,
         modelPath: preset.id,
+        androidEngine: preset.androidEngine,
       );
     }
     final modelAsset = preset.assetModelPath;
