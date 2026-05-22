@@ -4,7 +4,10 @@ import sys
 import wave
 from pathlib import Path
 
-SAMPLE_TEXT = "Screenshot fixture: a copyright-free sample paragraph ready to read aloud."
+SAMPLE_TEXT = (
+    "EPUB import fixture This copyright-free EPUB validates import through the "
+    "emulator UI. Just Read It should restore and read this document aloud."
+)
 SAMPLE_RATE = 16_000
 WORD_SECONDS = 0.28
 SILENCE_SECONDS = 0.05
