@@ -38,4 +38,3 @@ Future<void> main() async {
     print('JRI_SCREENSHOT_READY');
   });
 }
-

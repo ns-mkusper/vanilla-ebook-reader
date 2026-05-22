@@ -77,13 +77,13 @@ adb exec-out screencap -p > build/screenshots/01_editor_mobile.png
 adb shell input tap 540 2200
 
 for _ in $(seq 1 120); do
-  if grep -q 'JRI_TTS_WAV_PATH=' build/screenshots/flutter-run.log; then
+  if grep -q 'JRI_TTS_WAV_READY' build/screenshots/flutter-run.log; then
     break
   fi
   sleep 2
 done
 
-if ! grep -q 'JRI_TTS_WAV_PATH=' build/screenshots/flutter-run.log; then
+if ! grep -q 'JRI_TTS_WAV_READY' build/screenshots/flutter-run.log; then
   echo "UI interaction did not produce exported TTS WAV" >&2
   cat build/screenshots/flutter-run.log >&2 || true
   exit 1

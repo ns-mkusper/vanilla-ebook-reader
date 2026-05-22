@@ -149,7 +149,10 @@ class TtsService implements SpeechService {
     };
 
     final request = bridge.EngineRequest(backend: backend, gainDb: null);
-    final stream = bridge.streamAudio(text: text, request: request);
+    final stream = bridge.streamAudio(text: text, request: request).timeout(
+          const Duration(seconds: 2),
+          onTimeout: (sink) => sink.close(),
+        );
 
     final buffer = BytesBuilder();
     int? sampleRate;
@@ -218,6 +221,7 @@ class TtsService implements SpeechService {
     final file = File('$cacheDirPath/just_read_it_voice_sample.wav');
     await file.writeAsBytes(_wavBytes(pcmBytes, sampleRate), flush: true);
     debugPrint('JRI_TTS_WAV_PATH=${file.path}');
+    debugPrint('JRI_TTS_WAV_READY');
   }
 
   Uint8List _wavBytes(Uint8List pcmBytes, int sampleRate) {

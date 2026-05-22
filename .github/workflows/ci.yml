@@ -84,6 +84,26 @@ jobs:
         run: flutter create --platforms=android --project-name just_read_it .
       - name: Flutter pub get
         run: flutter pub get
+      - name: Patch Android audio service activity
+        run: |
+          MAIN_ACTIVITY=$(find android/app/src/main -name MainActivity.kt -o -name MainActivity.java | head -1)
+          if [ -z "$MAIN_ACTIVITY" ]; then
+            echo "MainActivity not found" >&2
+            exit 1
+          fi
+          if [[ "$MAIN_ACTIVITY" == *.kt ]]; then
+            cat > "$MAIN_ACTIVITY" <<'KOTLIN'
+package com.example.just_read_it
+
+class MainActivity : com.ryanheise.audioservice.AudioServiceActivity()
+KOTLIN
+          else
+            cat > "$MAIN_ACTIVITY" <<'JAVA'
+package com.example.just_read_it;
+
+public class MainActivity extends com.ryanheise.audioservice.AudioServiceActivity {}
+JAVA
+          fi
       - name: Install Rust Android target
         run: rustup target add x86_64-linux-android
       - name: Install cargo-ndk
