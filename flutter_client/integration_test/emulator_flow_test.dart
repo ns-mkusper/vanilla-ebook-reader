@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_read_it/main.dart' as app;
@@ -29,6 +30,11 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 500));
     }
     await binding.takeScreenshot('01_txt_import_editor');
+    if (Platform.isAndroid) {
+      await const MethodChannel('plugins.flutter.io/integration_test')
+          .invokeMethod<void>('revertFlutterImage');
+      await tester.pump(const Duration(milliseconds: 500));
+    }
   });
 
   testWidgets('full emulator import persistence voice playback flow',
