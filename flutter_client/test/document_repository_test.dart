@@ -25,7 +25,7 @@ void main() {
       () async {
     final source = File('${tempDir.path}/gemini-output.txt');
     const sample =
-        'Copyright-free sample text. Gemini produced concise reading notes.';
+        'Copyright-free sample text. Imported concise reading notes.';
     await source.writeAsString(sample);
 
     final stopwatch = Stopwatch()..start();

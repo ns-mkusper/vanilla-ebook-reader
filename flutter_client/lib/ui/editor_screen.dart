@@ -149,7 +149,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Text to read aloud',
                   hintText:
-                      'Paste Gemini output, ebook text, or imported content...',
+                      'Paste reading notes, ebook text, or imported content...',
                   border: OutlineInputBorder(),
                 ),
               ),
