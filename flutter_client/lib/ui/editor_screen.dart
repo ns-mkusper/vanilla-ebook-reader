@@ -197,8 +197,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       _status = 'Importing file...';
     });
     try {
-      final document =
-          await ref.read(documentRepositoryProvider).importPath(path);
+      final repository = ref.read(documentRepositoryProvider);
+      final document = await repository.importPath(path);
+      await repository.saveDraft(document);
       if (!mounted) return;
       _hydrating = true;
       _controller.text = document.text;
