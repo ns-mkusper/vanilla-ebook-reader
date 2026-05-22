@@ -26,10 +26,6 @@ void main() {
 
     await _importPath(tester, txtFile.path, contains('TXT import fixture'));
 
-    if (Platform.isAndroid) {
-      await binding.convertFlutterSurfaceToImage();
-      await tester.pump(const Duration(milliseconds: 500));
-    }
     await binding.takeScreenshot('01_txt_import_editor');
 
     await _importPath(tester, epubFile.path, contains('EPUB import fixture'));
@@ -61,6 +57,10 @@ void main() {
 
     expect(find.text('Streaming Playback'), findsOneWidget);
     expect(find.byKey(const Key('player.highlight.rich_text')), findsOneWidget);
+    if (Platform.isAndroid) {
+      await binding.convertFlutterSurfaceToImage();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
     await binding.takeScreenshot('02_player_playback');
 
     final wavFile = File('${tempDir.path}/just_read_it_voice_sample.wav');
