@@ -25,6 +25,13 @@ void main() {
     await _dismissSystemSettling(tester);
 
     await _importPath(tester, txtFile.path, contains('TXT import fixture'));
+
+    if (Platform.isAndroid) {
+      await binding.convertFlutterSurfaceToImage();
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    }
+    await binding.takeScreenshot('01_txt_import_editor');
+
     await _importPath(
         tester, epubFile.path, contains('Simple book speech fixture'));
 
@@ -71,10 +78,6 @@ void main() {
     );
     _validateWav(await wavFile.readAsBytes());
 
-    if (Platform.isAndroid) {
-      await binding.convertFlutterSurfaceToImage();
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
-    }
     await binding.takeScreenshot('02_player_playback');
   });
 }
