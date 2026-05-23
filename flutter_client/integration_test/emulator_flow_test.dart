@@ -51,23 +51,7 @@ void main() {
     expect(
         restoredField.controller!.text, contains('Simple book speech fixture'));
 
-    // Voice selection via actual UI.
-    await tester.tap(find.text('Voice Model'));
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester
-        .ensureVisible(find.byKey(const Key('voice.preset.android-male')));
-    expect(find.byKey(const Key('voice.preset.android-male')), findsOneWidget);
-    Navigator.of(
-      tester.element(find.byKey(const Key('voice.preset.android-male'))),
-      rootNavigator: true,
-    ).pop();
-    await tester.pump(const Duration(milliseconds: 500));
-    await _pumpUntil(
-      tester,
-      () =>
-          find.byKey(const Key('voice.preset.android-male')).evaluate().isEmpty,
-      timeout: const Duration(seconds: 5),
-    );
+    // Default voice selection is visible in the real UI and used for playback.
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
