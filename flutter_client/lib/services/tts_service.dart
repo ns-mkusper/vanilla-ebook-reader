@@ -324,39 +324,26 @@ Future<bool> _selectAndroidVoice(
   FlutterTts flutterTts,
   VoiceSelection voice,
 ) async {
-  final available = await flutterTts.getVoices;
-  if (available is! List) return false;
-  final preferredName = voice.androidVoiceName!.toLowerCase();
-  final preferredLocale = voice.androidVoiceLocale.toLowerCase();
-  final candidates = available
-      .whereType<dynamic>()
-      .map((entry) => Map<String, String>.from(entry as Map))
-      .where((entry) =>
-          (entry['locale'] ?? '').toLowerCase() == preferredLocale ||
-          (entry['locale'] ?? '').toLowerCase().startsWith('en'))
-      .toList();
-  final exact = candidates.where(
-    (entry) => (entry['name'] ?? '').toLowerCase() == preferredName,
-  );
-  final maleLike = candidates.where((entry) {
-    final name = (entry['name'] ?? '').toLowerCase();
-    return name.contains('male') ||
-        name.contains('guy') ||
-        name.contains('man') ||
-        name.contains('iom') ||
-        name.contains('rjs') ||
-        name.contains('david');
-  });
-  final chosen = exact.isNotEmpty
-      ? exact.first
-      : maleLike.isNotEmpty
-          ? maleLike.first
-          : null;
-  if (chosen == null) return false;
-  await flutterTts.setVoice(chosen);
-  debugPrint(
-      'JRI_ANDROID_VOICE_SELECTED=${chosen['name']} ${chosen['locale']}');
-  return true;
+  final preferredName = voice.androidVoiceName;
+  if (preferredName == null || preferredName.isEmpty) return false;
+  final selectedVoice = <String, String>{
+    'name': preferredName,
+    'locale': voice.androidVoiceLocale,
+  };
+  try {
+    await flutterTts.setVoice(selectedVoice);
+    debugPrint(
+      'JRI_ANDROID_VOICE_SELECTED=${selectedVoice['name']} '
+      '${selectedVoice['locale']}',
+    );
+    return true;
+  } catch (err) {
+    debugPrint(
+      'Preferred Android voice ${voice.androidVoiceName} unavailable; '
+      'using default engine voice. $err',
+    );
+    return false;
+  }
 }
 
 Future<int> _platformMaxInputLength(FlutterTts flutterTts) async {
