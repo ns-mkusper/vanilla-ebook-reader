@@ -24,10 +24,8 @@ if ! grep -q "JRI_PLAYBACK_WAV_READY" build/screenshots/flutter-run.log; then
   exit 1
 fi
 
-WAV_PATH="cache/just_read_it_playback_sample.wav"
-adb exec-out run-as com.example.just_read_it cat "$WAV_PATH" > build/screenshots/voice_sample_from_emulator.wav
 if ! grep -q '^RIFF' build/screenshots/voice_sample_from_emulator.wav; then
-  echo "Failed to pull exported emulator WAV from app cache" >&2
+  echo "Integration driver did not export playback-sourced WAV" >&2
   cat build/screenshots/voice_sample_from_emulator.wav >&2 || true
   exit 1
 fi
@@ -57,4 +55,3 @@ test -s build/screenshots/voice_sample_from_emulator.wav
 python3 ../tools/validate_pngs.py \
   build/screenshots/01_txt_import_editor.png \
   build/screenshots/02_player_playback.png
-adb shell am force-stop com.example.just_read_it || true

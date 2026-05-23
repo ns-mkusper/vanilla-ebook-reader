@@ -76,7 +76,11 @@ void main() {
       wavFile.existsSync,
       timeout: const Duration(seconds: 60),
     );
-    _validateWav(await wavFile.readAsBytes());
+    final wavBytes = await wavFile.readAsBytes();
+    _validateWav(wavBytes);
+    binding.reportData ??= <String, dynamic>{};
+    binding.reportData!['playbackWavBase64'] = base64Encode(wavBytes);
+    binding.reportData!['validatedPlaybackSource'] = true;
 
     await binding.takeScreenshot('02_player_playback');
   });
