@@ -21,11 +21,10 @@ final audioHandlerProvider = Provider<Future<TtsAudioHandler>>((ref) async {
 
 class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   TtsAudioHandler() {
-    _eventSub = _player.playbackEventStream.listen(_broadcastState);
+    _player.playbackEventStream.listen(_broadcastState);
   }
 
   final AudioPlayer _player = AudioPlayer();
-  StreamSubscription<PlaybackEvent>? _eventSub;
   MediaItem? _currentItem;
 
   Future<Duration> playPcm(
@@ -153,8 +152,11 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() async {
     await _player.stop();
-    await _eventSub?.cancel();
-    await super.stop();
+    playbackState.add(playbackState.value.copyWith(
+      playing: false,
+      processingState: AudioProcessingState.idle,
+      updatePosition: Duration.zero,
+    ));
   }
 
   @override

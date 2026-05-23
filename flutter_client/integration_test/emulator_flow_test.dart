@@ -83,6 +83,9 @@ void main() {
     binding.reportData!['validatedPlaybackSource'] = true;
 
     await binding.takeScreenshot('02_player_playback');
+
+    await tester.tap(find.byKey(const Key('player.stop')));
+    await tester.pump(const Duration(milliseconds: 500));
   });
 }
 

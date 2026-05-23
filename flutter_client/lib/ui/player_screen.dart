@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/audio_handler.dart';
 import '../services/model_repository.dart';
 import '../services/text_analysis.dart';
 import '../services/tts_service.dart';
@@ -64,6 +65,28 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 label: Text(backendLabel),
               ),
             ),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  key: const Key('player.pause'),
+                  onPressed: () async =>
+                      (await ref.read(audioHandlerProvider)).pause(),
+                  icon: const Icon(Icons.pause),
+                  label: const Text('Pause'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  key: const Key('player.stop'),
+                  onPressed: () async {
+                    await (await ref.read(audioHandlerProvider)).stop();
+                    ref.read(currentWordIndexProvider.notifier).state = 0;
+                  },
+                  icon: const Icon(Icons.stop),
+                  label: const Text('Stop'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             const Text('Live Highlight', key: Key('player.highlight.label')),
             const SizedBox(height: 12),
             Expanded(
