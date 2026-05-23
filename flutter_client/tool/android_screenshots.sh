@@ -6,7 +6,6 @@ flutter drive \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/emulator_flow_test.dart \
   -d emulator-5554 \
-  --keep-app-running \
   --dart-define=JRI_EXPORT_TTS_WAV=true \
   > build/screenshots/flutter-run.log 2>&1
 
