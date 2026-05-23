@@ -56,7 +56,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('Android Male Voice').last);
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Android Male Voice'), findsOneWidget);
+    expect(find.byKey(const Key('voice.current')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
+      'Android Male Voice',
+    );
 
     await tester.tap(find.text('Read Aloud'));
     await tester.pump(const Duration(seconds: 1));

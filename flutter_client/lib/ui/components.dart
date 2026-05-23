@@ -13,7 +13,10 @@ class ModelSelectorCard extends ConsumerWidget {
     return Card(
       child: ListTile(
         title: const Text('Voice Model'),
-        subtitle: Text(config.voice.displayName),
+        subtitle: Text(
+          config.voice.displayName,
+          key: const Key('voice.current'),
+        ),
         trailing: const Icon(Icons.keyboard_voice_outlined),
         onTap: () => _openVoiceSheet(context, ref),
       ),
