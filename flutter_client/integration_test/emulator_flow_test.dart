@@ -65,7 +65,9 @@ void main() {
         .isNotEmpty) {
       Navigator.of(
         tester.element(find.byKey(const Key('voice.preset.android-male'))),
+        rootNavigator: true,
       ).pop(voiceModelPresets.firstWhere((p) => p.id == 'android-male'));
+      await tester.pump(const Duration(milliseconds: 500));
     }
     await _pumpUntil(
       tester,
