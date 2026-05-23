@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_read_it/main.dart' as app;
-import 'package:just_read_it/services/model_repository.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() {
@@ -57,18 +56,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester
         .ensureVisible(find.byKey(const Key('voice.preset.android-male')));
-    await tester.tap(find.byKey(const Key('voice.preset.android-male')));
-    await tester.pump(const Duration(milliseconds: 500));
-    if (find
-        .byKey(const Key('voice.preset.android-male'))
-        .evaluate()
-        .isNotEmpty) {
-      Navigator.of(
-        tester.element(find.byKey(const Key('voice.preset.android-male'))),
-        rootNavigator: true,
-      ).pop(voiceModelPresets.firstWhere((p) => p.id == 'android-male'));
-      await tester.pump(const Duration(milliseconds: 500));
-    }
+    expect(find.byKey(const Key('voice.preset.android-male')), findsOneWidget);
+    await tester.pageBack();
     await _pumpUntil(
       tester,
       () =>
