@@ -35,6 +35,8 @@ class ModelSelectorCard extends ConsumerWidget {
       backend: preset.backend,
       modelPath: preset.backend == TtsEngineBackend.piper ? null : preset.id,
       androidEngine: preset.androidEngine,
+      androidVoiceName: preset.androidVoiceName,
+      androidVoiceLocale: preset.androidVoiceLocale,
     );
     notifier.selectVoice(selection);
     if (context.mounted) {

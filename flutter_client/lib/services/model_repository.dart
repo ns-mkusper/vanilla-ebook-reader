@@ -21,6 +21,8 @@ class VoiceModelPreset {
     this.assetModelPath,
     this.assetConfigPath,
     this.androidEngine,
+    this.androidVoiceName,
+    this.androidVoiceLocale = 'en-US',
   });
 
   final String id;
@@ -30,6 +32,8 @@ class VoiceModelPreset {
   final String? assetModelPath;
   final String? assetConfigPath;
   final String? androidEngine;
+  final String? androidVoiceName;
+  final String androidVoiceLocale;
 }
 
 @immutable
@@ -41,6 +45,8 @@ class VoiceSelection {
     this.modelPath,
     this.configPath,
     this.androidEngine,
+    this.androidVoiceName,
+    this.androidVoiceLocale = 'en-US',
   });
 
   final String id;
@@ -49,11 +55,15 @@ class VoiceSelection {
   final String? modelPath;
   final String? configPath;
   final String? androidEngine;
+  final String? androidVoiceName;
+  final String androidVoiceLocale;
 
   VoiceSelection copyWith({
     String? modelPath,
     String? configPath,
     String? androidEngine,
+    String? androidVoiceName,
+    String? androidVoiceLocale,
   }) {
     return VoiceSelection(
       id: id,
@@ -62,6 +72,8 @@ class VoiceSelection {
       modelPath: modelPath ?? this.modelPath,
       configPath: configPath ?? this.configPath,
       androidEngine: androidEngine ?? this.androidEngine,
+      androidVoiceName: androidVoiceName ?? this.androidVoiceName,
+      androidVoiceLocale: androidVoiceLocale ?? this.androidVoiceLocale,
     );
   }
 
@@ -73,6 +85,8 @@ class VoiceSelection {
         modelPath,
         configPath,
         androidEngine,
+        androidVoiceName,
+        androidVoiceLocale,
       );
 
   @override
@@ -83,25 +97,35 @@ class VoiceSelection {
         backend == other.backend &&
         other.modelPath == modelPath &&
         other.configPath == configPath &&
-        other.androidEngine == androidEngine;
+        other.androidEngine == androidEngine &&
+        other.androidVoiceName == androidVoiceName &&
+        other.androidVoiceLocale == androidVoiceLocale;
   }
 }
 
-const defaultVoiceId = 'android-system';
+const defaultVoiceId = 'android-male';
 
 const voiceModelPresets = <VoiceModelPreset>[
   VoiceModelPreset(
-    id: 'android-system',
-    label: 'Android System Voice',
+    id: 'android-male',
+    label: 'Android Male Voice',
     description:
-        'Uses the device TTS engine, then plays generated audio with the Just Read It media player.',
+        'Prefers a lower-pitched male English system voice, then plays generated audio with the Just Read It media player.',
+    backend: TtsEngineBackend.androidSystem,
+    androidVoiceName: 'en-us-x-iom-local',
+  ),
+  VoiceModelPreset(
+    id: 'android-system',
+    label: 'Android Default Voice',
+    description:
+        'Uses the device default TTS engine and voice, then plays generated audio with the Just Read It media player.',
     backend: TtsEngineBackend.androidSystem,
   ),
   VoiceModelPreset(
     id: 'flite-classic',
-    label: 'Classic Flite',
+    label: 'Classic Flite (requires Flite engine)',
     description:
-        'Small retro Flite-style voice when a Flite Android TTS engine is installed; otherwise falls back to the system voice.',
+        'Uses the Flite Android TTS engine only when that engine is installed; otherwise the app reports that Flite is unavailable instead of silently using the default voice.',
     backend: TtsEngineBackend.fliteClassic,
     androidEngine: 'edu.cmu.cs.speech.tts.flite',
   ),
@@ -116,13 +140,7 @@ class ModelRepository {
         return selection;
       }
       final preset = voiceModelPresets.firstWhere((p) => p.id == selection.id);
-      return VoiceSelection(
-        id: preset.id,
-        displayName: preset.label,
-        backend: preset.backend,
-        modelPath: preset.id,
-        androidEngine: preset.androidEngine,
-      );
+      return _selectionFromPreset(preset, modelPath: preset.id);
     }
     if (selection.modelPath != null && selection.configPath != null) {
       return selection;
@@ -145,13 +163,7 @@ class ModelRepository {
 
   Future<VoiceSelection> _materialize(VoiceModelPreset preset) async {
     if (preset.backend != TtsEngineBackend.piper) {
-      return VoiceSelection(
-        id: preset.id,
-        displayName: preset.label,
-        backend: preset.backend,
-        modelPath: preset.id,
-        androidEngine: preset.androidEngine,
-      );
+      return _selectionFromPreset(preset, modelPath: preset.id);
     }
     final modelAsset = preset.assetModelPath;
     final configAsset = preset.assetConfigPath;
@@ -174,6 +186,21 @@ class ModelRepository {
       backend: preset.backend,
       modelPath: modelFile.path,
       configPath: configFile.path,
+    );
+  }
+
+  VoiceSelection _selectionFromPreset(
+    VoiceModelPreset preset, {
+    String? modelPath,
+  }) {
+    return VoiceSelection(
+      id: preset.id,
+      displayName: preset.label,
+      backend: preset.backend,
+      modelPath: modelPath,
+      androidEngine: preset.androidEngine,
+      androidVoiceName: preset.androidVoiceName,
+      androidVoiceLocale: preset.androidVoiceLocale,
     );
   }
 

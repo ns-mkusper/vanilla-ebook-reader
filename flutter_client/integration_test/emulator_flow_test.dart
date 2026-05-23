@@ -51,14 +51,12 @@ void main() {
     expect(
         restoredField.controller!.text, contains('Simple book speech fixture'));
 
-    // Voice selection via actual UI. This exercises the Flite option when a
-    // Flite Android TTS engine is installed and otherwise verifies the app's
-    // fallback to the platform TTS engine without breaking playback.
+    // Voice selection via actual UI.
     await tester.tap(find.text('Voice Model'));
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('Classic Flite').last);
+    await tester.tap(find.text('Android Male Voice').last);
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Classic Flite'), findsOneWidget);
+    expect(find.text('Android Male Voice'), findsOneWidget);
 
     await tester.tap(find.text('Read Aloud'));
     await tester.pump(const Duration(seconds: 1));

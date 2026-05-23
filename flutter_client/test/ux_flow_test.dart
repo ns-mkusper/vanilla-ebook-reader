@@ -66,7 +66,7 @@ void main() {
   testWidgets('uses the default Android system voice for playback validation',
       (tester) async {
     await _pumpApp(tester, tempDir, speech);
-    expect(find.text('Android System Voice'), findsOneWidget);
+    expect(find.text('Android Male Voice'), findsOneWidget);
     await tester.enterText(
         find.byKey(const Key('editor.text')), 'Voice check text.');
     await tester.pump();
@@ -79,7 +79,7 @@ void main() {
     await tester.pump();
 
     expect(speech.lastText, 'Voice check text.');
-    expect(find.text('System voice: Android System Voice'), findsOneWidget);
+    expect(find.text('System voice: Android Male Voice'), findsOneWidget);
   });
 }
 

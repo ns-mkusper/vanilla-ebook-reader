@@ -136,22 +136,12 @@ class TtsService implements SpeechService {
 
     final flutterTts = FlutterTts();
     await flutterTts.awaitSynthCompletion(true);
-    await flutterTts.setLanguage('en-US');
+    await flutterTts.setLanguage(voice.androidVoiceLocale);
     await flutterTts.setVolume(1.0);
     await flutterTts.setSpeechRate(0.5);
     await flutterTts.setPitch(config.pitch.clamp(0.5, 2.0));
 
-    if (voice.backend == TtsEngineBackend.fliteClassic &&
-        voice.androidEngine != null &&
-        Platform.isAndroid) {
-      try {
-        await flutterTts.setEngine(voice.androidEngine!);
-      } catch (err) {
-        debugPrint(
-          'Flite Android TTS engine unavailable; falling back to system TTS: $err',
-        );
-      }
-    }
+    await _configurePlatformVoice(flutterTts, voice);
 
     final maxInputLength = await _platformMaxInputLength(flutterTts);
     final chunks = splitPlatformTtsText(text, maxChars: maxInputLength);
@@ -301,6 +291,72 @@ class TtsService implements SpeechService {
       _ref.read(currentWordIndexProvider.notifier).state = index;
     });
   }
+}
+
+Future<void> _configurePlatformVoice(
+  FlutterTts flutterTts,
+  VoiceSelection voice,
+) async {
+  if (voice.backend == TtsEngineBackend.fliteClassic) {
+    if (voice.androidEngine == null || !Platform.isAndroid) {
+      throw StateError('Classic Flite requires an Android Flite TTS engine.');
+    }
+    try {
+      await flutterTts.setEngine(voice.androidEngine!);
+    } catch (err) {
+      throw StateError(
+        'Classic Flite is unavailable. Install a Flite Android TTS engine or select another voice. ($err)',
+      );
+    }
+    return;
+  }
+
+  if (voice.androidVoiceName == null) return;
+  final selected = await _selectAndroidVoice(flutterTts, voice);
+  if (!selected) {
+    debugPrint(
+      'Preferred Android voice ${voice.androidVoiceName} unavailable; using default engine voice.',
+    );
+  }
+}
+
+Future<bool> _selectAndroidVoice(
+  FlutterTts flutterTts,
+  VoiceSelection voice,
+) async {
+  final available = await flutterTts.getVoices;
+  if (available is! List) return false;
+  final preferredName = voice.androidVoiceName!.toLowerCase();
+  final preferredLocale = voice.androidVoiceLocale.toLowerCase();
+  final candidates = available
+      .whereType<dynamic>()
+      .map((entry) => Map<String, String>.from(entry as Map))
+      .where((entry) =>
+          (entry['locale'] ?? '').toLowerCase() == preferredLocale ||
+          (entry['locale'] ?? '').toLowerCase().startsWith('en'))
+      .toList();
+  final exact = candidates.where(
+    (entry) => (entry['name'] ?? '').toLowerCase() == preferredName,
+  );
+  final maleLike = candidates.where((entry) {
+    final name = (entry['name'] ?? '').toLowerCase();
+    return name.contains('male') ||
+        name.contains('guy') ||
+        name.contains('man') ||
+        name.contains('iom') ||
+        name.contains('rjs') ||
+        name.contains('david');
+  });
+  final chosen = exact.isNotEmpty
+      ? exact.first
+      : maleLike.isNotEmpty
+          ? maleLike.first
+          : null;
+  if (chosen == null) return false;
+  await flutterTts.setVoice(chosen);
+  debugPrint(
+      'JRI_ANDROID_VOICE_SELECTED=${chosen['name']} ${chosen['locale']}');
+  return true;
 }
 
 Future<int> _platformMaxInputLength(FlutterTts flutterTts) async {
