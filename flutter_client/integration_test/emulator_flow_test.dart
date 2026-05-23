@@ -57,7 +57,11 @@ void main() {
     await tester
         .ensureVisible(find.byKey(const Key('voice.preset.android-male')));
     expect(find.byKey(const Key('voice.preset.android-male')), findsOneWidget);
-    await tester.pageBack();
+    Navigator.of(
+      tester.element(find.byKey(const Key('voice.preset.android-male'))),
+      rootNavigator: true,
+    ).pop();
+    await tester.pump(const Duration(milliseconds: 500));
     await _pumpUntil(
       tester,
       () =>
