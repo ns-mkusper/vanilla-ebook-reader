@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -152,11 +153,40 @@ class TtsService implements SpeechService {
       }
     }
 
-    final result =
-        await flutterTts.synthesizeToFile(text, generated.path, true);
-    if (!await generated.exists()) {
-      throw StateError(
-          'System TTS did not create ${generated.path} (result=$result).');
+    final maxInputLength = await _platformMaxInputLength(flutterTts);
+    final chunks = splitPlatformTtsText(text, maxChars: maxInputLength);
+    final chunkFiles = <File>[];
+    try {
+      for (var index = 0; index < chunks.length; index++) {
+        final chunkFile = chunks.length == 1
+            ? generated
+            : File(
+                '${cacheDir.path}/just_read_it_tts_chunk_${DateTime.now().microsecondsSinceEpoch}_$index.wav');
+        final result = await flutterTts.synthesizeToFile(
+          chunks[index],
+          chunkFile.path,
+          true,
+        );
+        if (!await chunkFile.exists()) {
+          throw StateError(
+            'System TTS did not create ${chunkFile.path} (result=$result).',
+          );
+        }
+        final size = await chunkFile.length();
+        if (size <= 44) {
+          throw StateError('System TTS produced empty WAV chunk $index.');
+        }
+        chunkFiles.add(chunkFile);
+      }
+      if (chunkFiles.length > 1) {
+        await stitchWavFiles(chunkFiles, generated);
+      }
+    } finally {
+      for (final file in chunkFiles) {
+        if (file.path != generated.path && await file.exists()) {
+          await file.delete();
+        }
+      }
     }
 
     final duration = await _wavDuration(generated);
@@ -273,4 +303,186 @@ class TtsService implements SpeechService {
   }
 }
 
+Future<int> _platformMaxInputLength(FlutterTts flutterTts) async {
+  if (Platform.isAndroid) {
+    final maxLength = await flutterTts.getMaxSpeechInputLength;
+    if (maxLength != null && maxLength > 0) {
+      return maxLength.clamp(500, _platformChunkHardCap).toInt();
+    }
+  }
+  return _platformChunkHardCap;
+}
+
+@visibleForTesting
+List<String> splitPlatformTtsText(
+  String rawText, {
+  int maxChars = _platformChunkHardCap,
+}) {
+  final normalized = rawText
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .replaceAll(RegExp(r'[ \t]+'), ' ')
+      .trim();
+  if (normalized.isEmpty) return const [];
+
+  final safeMax = maxChars.clamp(200, _platformChunkHardCap).toInt();
+  final chunks = <String>[];
+  final buffer = StringBuffer();
+
+  void flush() {
+    final chunk = buffer.toString().trim();
+    if (chunk.isNotEmpty) chunks.add(chunk);
+    buffer.clear();
+  }
+
+  void appendSegment(String segment) {
+    final trimmed = segment.trim();
+    if (trimmed.isEmpty) return;
+    if (trimmed.length > safeMax) {
+      flush();
+      for (var start = 0; start < trimmed.length; start += safeMax) {
+        final end = (start + safeMax).clamp(0, trimmed.length).toInt();
+        chunks.add(trimmed.substring(start, end).trim());
+      }
+      return;
+    }
+    final pendingLength = buffer.isEmpty
+        ? trimmed.length
+        : buffer.length + _chunkSeparator.length + trimmed.length;
+    if (pendingLength > safeMax) flush();
+    if (buffer.isNotEmpty) buffer.write(_chunkSeparator);
+    buffer.write(trimmed);
+  }
+
+  final paragraphs = normalized.split(RegExp(r'\n{2,}'));
+  for (final paragraph in paragraphs) {
+    final sentences = paragraph
+        .splitMapJoin(
+          RegExp(r'(?<=[.!?])\s+'),
+          onMatch: (_) => '\u{1f}',
+          onNonMatch: (text) => text,
+        )
+        .split('\u{1f}');
+    for (final sentence in sentences) {
+      appendSegment(sentence);
+    }
+  }
+  flush();
+  return chunks;
+}
+
+@visibleForTesting
+Future<File> stitchWavFiles(List<File> inputs, File output) async {
+  if (inputs.isEmpty) {
+    throw ArgumentError.value(inputs, 'inputs', 'must not be empty');
+  }
+  final pcmParts = <Uint8List>[];
+  int? sampleRate;
+  int? channels;
+  int? bitsPerSample;
+  var totalDataLength = 0;
+
+  for (final input in inputs) {
+    final bytes = await input.readAsBytes();
+    final info = _parsePcmWav(bytes, input.path);
+    sampleRate ??= info.sampleRate;
+    channels ??= info.channels;
+    bitsPerSample ??= info.bitsPerSample;
+    if (info.sampleRate != sampleRate ||
+        info.channels != channels ||
+        info.bitsPerSample != bitsPerSample) {
+      throw StateError('Cannot stitch WAV files with different formats.');
+    }
+    pcmParts.add(info.pcmBytes);
+    totalDataLength += info.pcmBytes.length;
+  }
+
+  final out = BytesBuilder(copy: false);
+  out.add(_wavHeader(
+    dataLength: totalDataLength,
+    sampleRate: sampleRate!,
+    channels: channels!,
+    bitsPerSample: bitsPerSample!,
+  ));
+  for (final part in pcmParts) {
+    out.add(part);
+  }
+  await output.writeAsBytes(out.takeBytes(), flush: true);
+  return output;
+}
+
+_PcmWav _parsePcmWav(Uint8List bytes, String label) {
+  if (bytes.length < 44 || ascii.decode(bytes.sublist(0, 4)) != 'RIFF') {
+    throw StateError('$label is not a RIFF WAV file.');
+  }
+  if (ascii.decode(bytes.sublist(8, 12)) != 'WAVE') {
+    throw StateError('$label is not a WAVE file.');
+  }
+  final data = ByteData.sublistView(bytes);
+  final channels = data.getUint16(22, Endian.little);
+  final sampleRate = data.getUint32(24, Endian.little);
+  final bitsPerSample = data.getUint16(34, Endian.little);
+
+  var offset = 12;
+  while (offset + 8 <= bytes.length) {
+    final chunkId = ascii.decode(bytes.sublist(offset, offset + 4));
+    final chunkLength = data.getUint32(offset + 4, Endian.little);
+    final chunkStart = offset + 8;
+    final chunkEnd = chunkStart + chunkLength;
+    if (chunkEnd > bytes.length) {
+      throw StateError('$label has a truncated $chunkId chunk.');
+    }
+    if (chunkId == 'data') {
+      return _PcmWav(
+        sampleRate: sampleRate,
+        channels: channels,
+        bitsPerSample: bitsPerSample,
+        pcmBytes: Uint8List.fromList(bytes.sublist(chunkStart, chunkEnd)),
+      );
+    }
+    offset = chunkEnd + (chunkLength.isOdd ? 1 : 0);
+  }
+  throw StateError('$label has no data chunk.');
+}
+
+Uint8List _wavHeader({
+  required int dataLength,
+  required int sampleRate,
+  required int channels,
+  required int bitsPerSample,
+}) {
+  final bytesPerSample = bitsPerSample ~/ 8;
+  final header = ByteData(44);
+  header.setUint32(0, 0x52494646, Endian.big);
+  header.setUint32(4, 36 + dataLength, Endian.little);
+  header.setUint32(8, 0x57415645, Endian.big);
+  header.setUint32(12, 0x666d7420, Endian.big);
+  header.setUint32(16, 16, Endian.little);
+  header.setUint16(20, 1, Endian.little);
+  header.setUint16(22, channels, Endian.little);
+  header.setUint32(24, sampleRate, Endian.little);
+  header.setUint32(28, sampleRate * channels * bytesPerSample, Endian.little);
+  header.setUint16(32, channels * bytesPerSample, Endian.little);
+  header.setUint16(34, bitsPerSample, Endian.little);
+  header.setUint32(36, 0x64617461, Endian.big);
+  header.setUint32(40, dataLength, Endian.little);
+  return header.buffer.asUint8List();
+}
+
+class _PcmWav {
+  const _PcmWav({
+    required this.sampleRate,
+    required this.channels,
+    required this.bitsPerSample,
+    required this.pcmBytes,
+  });
+
+  final int sampleRate;
+  final int channels;
+  final int bitsPerSample;
+  final Uint8List pcmBytes;
+}
+
 const _fallbackSampleRate = 16000;
+const _platformChunkHardCap = 3200;
+const _chunkSeparator = '\n\n';
