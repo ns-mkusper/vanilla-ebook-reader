@@ -72,6 +72,7 @@ class _VoicePresetSheet extends ConsumerWidget {
               children: [
                 for (final preset in voiceModelPresets)
                   RadioListTile<String>(
+                    key: Key('voice.preset.${preset.id}'),
                     value: preset.id,
                     // ignore: deprecated_member_use
                     groupValue: config.voice.id,

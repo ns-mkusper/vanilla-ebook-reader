@@ -54,15 +54,22 @@ void main() {
     // Voice selection via actual UI.
     await tester.tap(find.text('Voice Model'));
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('Android Male Voice').last);
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester
+        .ensureVisible(find.byKey(const Key('voice.preset.android-male')));
+    await tester.tap(find.byKey(const Key('voice.preset.android-male')));
+    await _pumpUntil(
+      tester,
+      () =>
+          find.byKey(const Key('voice.preset.android-male')).evaluate().isEmpty,
+      timeout: const Duration(seconds: 5),
+    );
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
       'Android Male Voice',
     );
 
-    await tester.tap(find.text('Read Aloud'));
+    await tester.tap(find.byKey(const Key('player.launch')));
     await tester.pump(const Duration(seconds: 1));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(seconds: 5)),
