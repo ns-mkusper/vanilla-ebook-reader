@@ -57,6 +57,27 @@ void main() {
       },
       timeout: const Duration(seconds: 30),
     );
+    await _pumpUntil(
+      tester,
+      () {
+        final status =
+            tester.widget<Text>(find.byKey(const Key('player.status'))).data ??
+                '';
+        return status.contains('Playing');
+      },
+      timeout: const Duration(minutes: 2),
+    );
+    await tester.tap(find.byKey(const Key('player.pause')));
+    await _pumpUntilFound(tester, find.text('Resume'),
+        timeout: const Duration(seconds: 10));
+    final pausedProgress = _playerProgress(tester);
+    await tester.pump(const Duration(seconds: 2));
+    expect(_playerProgress(tester).current, pausedProgress.current);
+
+    await tester.tap(find.byKey(const Key('player.pause')));
+    await _pumpUntilFound(tester, find.text('Pause'),
+        timeout: const Duration(seconds: 10));
+
     final highlightFinder = find.byKey(const Key('player.highlight.rich_text'));
     expect(highlightFinder, findsOneWidget);
     final highlightedText =
@@ -73,16 +94,6 @@ void main() {
     debugPrint(
       'JRI_FLCL_PLAYBACK_PROOF_MS=${launchTimer.elapsedMilliseconds}',
     );
-    await tester.tap(find.byKey(const Key('player.pause')));
-    await _pumpUntilFound(tester, find.text('Resume'),
-        timeout: const Duration(seconds: 10));
-    final pausedProgress = _playerProgress(tester);
-    await tester.pump(const Duration(seconds: 2));
-    expect(_playerProgress(tester).current, pausedProgress.current);
-
-    await tester.tap(find.byKey(const Key('player.pause')));
-    await _pumpUntilFound(tester, find.text('Pause'),
-        timeout: const Duration(seconds: 10));
     await _pumpUntil(
       tester,
       () {

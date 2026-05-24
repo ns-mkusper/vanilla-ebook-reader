@@ -79,12 +79,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 OutlinedButton.icon(
                   key: const Key('player.pause'),
                   onPressed: () async {
-                    final audioHandler = await ref.read(audioHandlerProvider);
-                    await audioHandler.togglePlayPause();
-                    if (!mounted) return;
-                    setState(() => _paused = !_paused);
+                    final shouldResume = _paused;
+                    setState(() => _paused = !shouldResume);
                     ref.read(ttsStatusProvider.notifier).state =
-                        _paused ? 'Paused' : 'Playing';
+                        shouldResume ? 'Playing' : 'Paused';
+                    final audioHandler = await ref.read(audioHandlerProvider);
+                    if (shouldResume) {
+                      await audioHandler.play();
+                    } else {
+                      await audioHandler.pause();
+                    }
                   },
                   icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
                   label: Text(_paused ? 'Resume' : 'Pause'),

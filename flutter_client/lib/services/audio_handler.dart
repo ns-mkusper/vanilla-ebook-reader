@@ -92,6 +92,14 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     if (playlist == null) return;
     await playlist.add(AudioSource.uri(file.uri));
     debugPrint('JRI_PLAYLIST_CHUNK_APPENDED count=${playlist.children.length}');
+    if (_player.processingState == ProcessingState.completed &&
+        _player.currentIndex != null) {
+      await _player.seek(Duration.zero, index: playlist.children.length - 1);
+      await _player.play();
+      debugPrint(
+        'JRI_PLAYLIST_RESUMED_AFTER_BUFFER_GAP index=${playlist.children.length - 1}',
+      );
+    }
   }
 
   Future<void> _playSource(
