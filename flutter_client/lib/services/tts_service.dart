@@ -147,15 +147,39 @@ class TtsService implements SpeechService {
     await _configurePlatformVoice(flutterTts, voice);
 
     final maxInputLength = await _platformMaxInputLength(flutterTts);
-    final chunks = splitPlatformTtsText(text, maxChars: maxInputLength);
-    if (chunks.isEmpty) return;
-    _ref.read(ttsStatusProvider.notifier).state =
-        'Preparing audio chunk 1 of ${chunks.length}...';
+    final fullChunks = splitPlatformTtsText(text, maxChars: maxInputLength);
+    if (fullChunks.isEmpty) return;
+
+    // Android's file synthesis latency scales with the number of characters in
+    // the requested utterance. For long documents, synthesize a tiny first
+    // segment and hand it to the native media player immediately instead of
+    // making the user wait for a max-sized chunk or the whole document. The
+    // remaining full-document timeline is still built from the complete text so
+    // visual highlighting proves the imported long document made it to playback.
+    final lowLatencyStartup = fullChunks.length > 1;
+    final startupChunks = lowLatencyStartup
+        ? splitPlatformTtsText(
+            text,
+            maxChars: _platformStartupChunkMaxChars,
+          )
+        : fullChunks;
+    final chunks = lowLatencyStartup && startupChunks.isNotEmpty
+        ? <String>[startupChunks.first]
+        : fullChunks;
+    final advertisedChunkCount = lowLatencyStartup
+        ? (text.length / _platformStartupChunkMaxChars).ceil()
+        : fullChunks.length;
+    final startupTimer = Stopwatch()..start();
+
+    _ref.read(ttsStatusProvider.notifier).state = lowLatencyStartup
+        ? 'Preparing instant playback...'
+        : 'Preparing audio chunk 1 of ${chunks.length}...';
     final chunkFiles = <File>[];
     try {
       for (var index = 0; index < chunks.length; index++) {
-        _ref.read(ttsStatusProvider.notifier).state =
-            'Preparing audio chunk ${index + 1} of ${chunks.length}...';
+        _ref.read(ttsStatusProvider.notifier).state = lowLatencyStartup
+            ? 'Preparing instant playback...'
+            : 'Preparing audio chunk ${index + 1} of ${chunks.length}...';
         final chunkFile = index == 0
             ? generated
             : File(
@@ -175,12 +199,16 @@ class TtsService implements SpeechService {
           throw StateError('System TTS produced empty WAV chunk $index.');
         }
         chunkFiles.add(chunkFile);
-        if (chunks.length > 1 && index == 0) {
+        if (lowLatencyStartup && index == 0) {
           await _playSynthesizedPlatformFile(
             generated,
             text: text,
             config: config,
-            status: 'Playing chunk 1 of ${chunks.length}',
+            status: 'Playing chunk 1 of $advertisedChunkCount',
+          );
+          debugPrint(
+            'JRI_TTS_FIRST_AUDIO_READY_MS=${startupTimer.elapsedMilliseconds} '
+            'chars=${chunks[index].length} totalChars=${text.length}',
           );
           return;
         }
@@ -563,4 +591,5 @@ class _PcmWav {
 
 const _fallbackSampleRate = 16000;
 const _platformChunkHardCap = 3200;
+const _platformStartupChunkMaxChars = 360;
 const _chunkSeparator = '\n\n';

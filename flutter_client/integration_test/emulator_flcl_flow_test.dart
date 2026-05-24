@@ -35,6 +35,7 @@ void main() {
       'Android Male Voice',
     );
 
+    final launchTimer = Stopwatch()..start();
     await _tapLaunchButton(tester);
     await _pumpUntilFound(tester, find.text('Streaming Playback'),
         timeout: const Duration(seconds: 60));
@@ -46,7 +47,8 @@ void main() {
         final status =
             tester.widget<Text>(find.byKey(const Key('player.status'))).data ??
                 '';
-        return status.contains('Preparing audio chunk') ||
+        return status.contains('Preparing instant playback') ||
+            status.contains('Preparing audio chunk') ||
             status.contains('Starting media player') ||
             status.contains('Playing');
       },
@@ -62,8 +64,11 @@ void main() {
     final wavFile = File('${tempDir.path}/just_read_it_playback_sample.wav');
     await _pumpUntil(
       tester,
-      () => wavFile.existsSync() && wavFile.lengthSync() > 1000000,
-      timeout: const Duration(minutes: 10),
+      () => wavFile.existsSync() && wavFile.lengthSync() > 100000,
+      timeout: const Duration(minutes: 2),
+    );
+    debugPrint(
+      'JRI_FLCL_PLAYBACK_PROOF_MS=${launchTimer.elapsedMilliseconds}',
     );
     final bytes = await wavFile.readAsBytes();
     _validateWav(bytes);
