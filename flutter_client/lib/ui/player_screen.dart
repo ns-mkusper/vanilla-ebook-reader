@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/audio_handler.dart';
-import '../services/model_repository.dart';
 import '../services/text_analysis.dart';
 import '../services/tts_service.dart';
 
@@ -39,15 +38,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     final boundaries = ref.watch(wordBoundariesProvider);
     final effectiveBoundaries =
         boundaries.isEmpty ? computeWordBoundaries(widget.text) : boundaries;
-    final config = ref.watch(ttsConfigProvider);
     final status = ref.watch(ttsStatusProvider);
-    final backendLabel = switch (config.voice.backend) {
-      TtsEngineBackend.piper => 'Neural voice: ${config.voice.displayName}',
-      TtsEngineBackend.fliteClassic =>
-        'Classic voice: ${config.voice.displayName}',
-      TtsEngineBackend.androidSystem =>
-        'System voice: ${config.voice.displayName}',
-    };
     return Scaffold(
       appBar: AppBar(title: const Text('Streaming Playback')),
       body: Padding(
@@ -55,19 +46,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Chip(
-                avatar: Icon(
-                  config.voice.backend == TtsEngineBackend.piper
-                      ? Icons.graphic_eq
-                      : Icons.record_voice_over,
-                  color: Theme.of(context).colorScheme.onSecondary,
-                ),
-                backgroundColor: Theme.of(context).colorScheme.secondary,
-                label: Text(backendLabel),
-              ),
-            ),
             Text(
               status,
               key: const Key('player.status'),

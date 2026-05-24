@@ -79,7 +79,7 @@ void main() {
     await tester.pump();
 
     expect(speech.lastText, 'Voice check text.');
-    expect(find.text('Classic voice: Motorola Male (Flite)'), findsOneWidget);
+    expect(find.text('Streaming Playback'), findsOneWidget);
   });
 }
 

@@ -147,7 +147,25 @@ class TtsService implements SpeechService {
     final flutterTts = FlutterTts();
     await flutterTts.awaitSynthCompletion(true);
     if (voice.backend == TtsEngineBackend.fliteClassic) {
-      await _configureFliteEngine(flutterTts, voice);
+      try {
+        await _configureFliteEngine(flutterTts, voice);
+      } catch (err) {
+        debugPrint('JRI_FLITE_UNAVAILABLE_FALLING_BACK=$err');
+        _ref.read(ttsStatusProvider.notifier).state =
+            'Flite is not installed; using Android Default Voice.';
+        final fallbackPreset =
+            voiceModelPresets.firstWhere((p) => p.id == 'android-system');
+        voice = VoiceSelection(
+          id: fallbackPreset.id,
+          displayName: fallbackPreset.label,
+          backend: fallbackPreset.backend,
+          modelPath: fallbackPreset.id,
+          androidEngine: fallbackPreset.androidEngine,
+          androidVoiceName: fallbackPreset.androidVoiceName,
+          androidVoiceLocale: fallbackPreset.androidVoiceLocale,
+        );
+        _ref.read(ttsConfigProvider.notifier).hydrateVoice(voice);
+      }
     }
     await flutterTts.setLanguage(voice.androidVoiceLocale);
     await flutterTts.setVolume(1.0);
