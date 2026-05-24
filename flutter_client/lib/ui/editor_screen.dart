@@ -147,6 +147,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 minLines: 8,
                 maxLines: 14,
                 textInputAction: TextInputAction.newline,
+                autofillHints: const <String>[],
                 decoration: const InputDecoration(
                   labelText: 'Text to read aloud',
                   hintText:
@@ -275,6 +276,7 @@ class _ImportPathDialogState extends State<_ImportPathDialog> {
         controller: _pathController,
         autofocus: true,
         textInputAction: TextInputAction.done,
+        autofillHints: const <String>[],
         onEditingComplete: _submit,
         onSubmitted: _submit,
         decoration: const InputDecoration(
