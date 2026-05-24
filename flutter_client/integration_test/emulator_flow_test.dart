@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_read_it/main.dart' as app;
@@ -82,6 +83,55 @@ void main() {
 
     await binding.takeScreenshot('02_player_playback');
 
+    await tester.tap(find.byKey(const Key('player.stop')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pageBack();
+    await _pumpUntilFound(tester, find.byKey(const Key('editor.text')),
+        timeout: const Duration(seconds: 10));
+
+    final flclFile = File('${tempDir.path}/flcl_lore.md');
+    await flclFile.writeAsString(
+      await rootBundle.loadString('test/fixtures/flcl_lore.md'),
+      flush: true,
+    );
+    await _importPath(tester, flclFile.path, contains('Tier 7: The Abyss'));
+    expect(_editorText(tester), contains('See you Space Cowboy'));
+
+    await tester.tap(find.byKey(const Key('player.launch')));
+    await _pumpUntilFound(tester, find.text('Streaming Playback'),
+        timeout: const Duration(seconds: 15));
+    await _pumpUntil(
+      tester,
+      () {
+        final status =
+            tester.widget<Text>(find.byKey(const Key('player.status'))).data ??
+                '';
+        return status.contains('Preparing audio chunk') ||
+            status.contains('Starting media player') ||
+            status.contains('Playing');
+      },
+      timeout: const Duration(seconds: 20),
+    );
+    expect(find.byKey(const Key('player.highlight.rich_text')), findsOneWidget);
+    expect(find.textContaining('Fooly Cooly'), findsWidgets);
+
+    final flclWavFile =
+        File('${tempDir.path}/just_read_it_playback_sample.wav');
+    final previousModified = await flclWavFile.lastModified();
+    await _pumpUntil(
+      tester,
+      () {
+        if (!flclWavFile.existsSync()) return false;
+        return flclWavFile.lastModifiedSync().isAfter(previousModified) &&
+            flclWavFile.lengthSync() > wavBytes.length;
+      },
+      timeout: const Duration(minutes: 4),
+    );
+    final flclWavBytes = await flclWavFile.readAsBytes();
+    _validateWav(flclWavBytes);
+    expect(flclWavBytes.length, greaterThan(wavBytes.length));
+    debugPrint(
+        'JRI_FLCL_FULL_TEXT_PLAYBACK_VALIDATED bytes=${flclWavBytes.length}');
     await tester.tap(find.byKey(const Key('player.stop')));
     await tester.pump(const Duration(milliseconds: 500));
   });

@@ -38,6 +38,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     final effectiveBoundaries =
         boundaries.isEmpty ? computeWordBoundaries(widget.text) : boundaries;
     final config = ref.watch(ttsConfigProvider);
+    final status = ref.watch(ttsStatusProvider);
     final backendLabel = switch (config.voice.backend) {
       TtsEngineBackend.piper => 'Neural voice: ${config.voice.displayName}',
       TtsEngineBackend.fliteClassic =>
@@ -65,6 +66,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 label: Text(backendLabel),
               ),
             ),
+            Text(
+              status,
+              key: const Key('player.status'),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 OutlinedButton.icon(

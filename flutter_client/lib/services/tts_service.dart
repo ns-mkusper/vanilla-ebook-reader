@@ -22,6 +22,7 @@ final currentWordIndexProvider = StateProvider<int>((ref) => 0);
 final wordBoundariesProvider =
     StateProvider<List<TextWordBoundary>>((ref) => const []);
 final wordCuesProvider = StateProvider<List<WordCue>>((ref) => const []);
+final ttsStatusProvider = StateProvider<String>((ref) => 'Idle');
 
 class TtsConfig {
   const TtsConfig({
@@ -102,6 +103,7 @@ class TtsService implements SpeechService {
     if (text.isEmpty) {
       return;
     }
+    _ref.read(ttsStatusProvider.notifier).state = 'Preparing audio...';
 
     final repo = _ref.read(modelRepositoryProvider);
     final config = _ref.read(ttsConfigProvider);
@@ -145,9 +147,14 @@ class TtsService implements SpeechService {
 
     final maxInputLength = await _platformMaxInputLength(flutterTts);
     final chunks = splitPlatformTtsText(text, maxChars: maxInputLength);
+    if (chunks.isEmpty) return;
+    _ref.read(ttsStatusProvider.notifier).state =
+        'Preparing audio chunk 1 of ${chunks.length}...';
     final chunkFiles = <File>[];
     try {
       for (var index = 0; index < chunks.length; index++) {
+        _ref.read(ttsStatusProvider.notifier).state =
+            'Preparing audio chunk ${index + 1} of ${chunks.length}...';
         final chunkFile = chunks.length == 1
             ? generated
             : File(
@@ -179,6 +186,7 @@ class TtsService implements SpeechService {
       }
     }
 
+    _ref.read(ttsStatusProvider.notifier).state = 'Starting media player...';
     final duration = await _wavDuration(generated);
     final audioHandler = await _ref.read(audioHandlerProvider);
     await audioHandler.playFile(
@@ -186,6 +194,7 @@ class TtsService implements SpeechService {
       duration: duration,
       speed: config.rate,
     );
+    _ref.read(ttsStatusProvider.notifier).state = 'Playing';
     _attachTextTimeline(text, duration, audioHandler);
   }
 
@@ -244,12 +253,14 @@ class TtsService implements SpeechService {
       '${resolvedRate}Hz using voice ${voice.id} (${voice.backend}).',
     );
 
+    _ref.read(ttsStatusProvider.notifier).state = 'Starting media player...';
     final audioHandler = await _ref.read(audioHandlerProvider);
     final duration = await audioHandler.playPcm(
       pcmBytes,
       resolvedRate,
       speed: config.rate,
     );
+    _ref.read(ttsStatusProvider.notifier).state = 'Playing';
     _attachTextTimeline(text, duration, audioHandler);
   }
 
