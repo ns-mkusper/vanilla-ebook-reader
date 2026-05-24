@@ -51,8 +51,12 @@ void main() {
       },
       timeout: const Duration(seconds: 30),
     );
-    expect(find.byKey(const Key('player.highlight.rich_text')), findsOneWidget);
-    expect(find.textContaining('Fooly Cooly'), findsWidgets);
+    final highlightFinder = find.byKey(const Key('player.highlight.rich_text'));
+    expect(highlightFinder, findsOneWidget);
+    final highlightedText =
+        tester.widget<RichText>(highlightFinder).text.toPlainText();
+    expect(highlightedText, contains('Fooly Cooly'));
+    expect(highlightedText, contains('See you Space Cowboy'));
 
     final wavFile = File('${tempDir.path}/just_read_it_playback_sample.wav');
     await _pumpUntil(
