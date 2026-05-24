@@ -23,6 +23,7 @@ final wordBoundariesProvider =
     StateProvider<List<TextWordBoundary>>((ref) => const []);
 final wordCuesProvider = StateProvider<List<WordCue>>((ref) => const []);
 final ttsStatusProvider = StateProvider<String>((ref) => 'Idle');
+final ttsStopSignalProvider = StateProvider<int>((ref) => 0);
 
 class TtsConfig {
   const TtsConfig({
@@ -103,6 +104,7 @@ class TtsService implements SpeechService {
     if (text.isEmpty) {
       return;
     }
+    final stopSignal = _ref.read(ttsStopSignalProvider);
     _ref.read(ttsStatusProvider.notifier).state = 'Preparing audio...';
     unawaited(_ref.read(audioHandlerProvider));
 
@@ -116,9 +118,9 @@ class TtsService implements SpeechService {
     switch (voice.backend) {
       case TtsEngineBackend.androidSystem:
       case TtsEngineBackend.fliteClassic:
-        await _speakWithPlatformTts(text, voice, config);
+        await _speakWithPlatformTts(text, voice, config, stopSignal);
       case TtsEngineBackend.piper:
-        await _speakWithRustPiper(text, voice, config);
+        await _speakWithRustPiper(text, voice, config, stopSignal);
     }
   }
 
@@ -126,6 +128,7 @@ class TtsService implements SpeechService {
     String text,
     VoiceSelection voice,
     TtsConfig config,
+    int stopSignal,
   ) async {
     if (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS) {
       throw UnsupportedError(
@@ -198,6 +201,10 @@ class TtsService implements SpeechService {
         if (size <= 44) {
           throw StateError('System TTS produced empty WAV chunk $index.');
         }
+        if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+          _ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+          return;
+        }
         chunkFiles.add(chunkFile);
         if (lowLatencyStartup && index == 0) {
           await _playSynthesizedPlatformFile(
@@ -205,6 +212,7 @@ class TtsService implements SpeechService {
             text: text,
             config: config,
             status: 'Playing chunk 1 of $advertisedChunkCount',
+            stopSignal: stopSignal,
           );
           debugPrint(
             'JRI_TTS_FIRST_AUDIO_READY_MS=${startupTimer.elapsedMilliseconds} '
@@ -229,6 +237,7 @@ class TtsService implements SpeechService {
       text: text,
       config: config,
       status: 'Playing',
+      stopSignal: stopSignal,
     );
   }
 
@@ -237,7 +246,12 @@ class TtsService implements SpeechService {
     required String text,
     required TtsConfig config,
     required String status,
+    required int stopSignal,
   }) async {
+    if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+      _ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+      return;
+    }
     _ref.read(ttsStatusProvider.notifier).state = 'Starting media player...';
     final duration = await _wavDuration(generated);
     final audioHandler = await _ref.read(audioHandlerProvider);
@@ -246,6 +260,11 @@ class TtsService implements SpeechService {
       duration: duration,
       speed: config.rate,
     );
+    if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+      await audioHandler.stop();
+      _ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+      return;
+    }
     _ref.read(ttsStatusProvider.notifier).state = status;
     _attachTextTimeline(text, duration, audioHandler);
   }
@@ -254,6 +273,7 @@ class TtsService implements SpeechService {
     String text,
     VoiceSelection voice,
     TtsConfig config,
+    int stopSignal,
   ) async {
     final backend = bridge.EngineBackend.piper(
       bridge.PiperBackendConfig(
@@ -305,6 +325,10 @@ class TtsService implements SpeechService {
       '${resolvedRate}Hz using voice ${voice.id} (${voice.backend}).',
     );
 
+    if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+      _ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+      return;
+    }
     _ref.read(ttsStatusProvider.notifier).state = 'Starting media player...';
     final audioHandler = await _ref.read(audioHandlerProvider);
     final duration = await audioHandler.playPcm(
@@ -312,6 +336,11 @@ class TtsService implements SpeechService {
       resolvedRate,
       speed: config.rate,
     );
+    if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+      await audioHandler.stop();
+      _ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+      return;
+    }
     _ref.read(ttsStatusProvider.notifier).state = 'Playing';
     _attachTextTimeline(text, duration, audioHandler);
   }

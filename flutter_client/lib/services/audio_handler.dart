@@ -142,16 +142,34 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   Stream<Duration> positionStream() => _player.positionStream;
+  Stream<bool> playingStream() => _player.playingStream;
+  bool get isPlaying => _player.playing;
+
+  Future<void> togglePlayPause() async {
+    if (_player.playing) {
+      await pause();
+    } else {
+      await play();
+    }
+  }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    if (_player.processingState == ProcessingState.completed) {
+      await _player.seek(Duration.zero);
+    }
+    await _player.play();
+  }
 
   @override
   Future<void> pause() => _player.pause();
 
   @override
   Future<void> stop() async {
+    await _player.pause();
+    await _player.seek(Duration.zero);
     await _player.stop();
+    debugPrint('JRI_PLAYBACK_STOPPED');
     playbackState.add(playbackState.value.copyWith(
       playing: false,
       processingState: AudioProcessingState.idle,

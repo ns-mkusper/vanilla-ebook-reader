@@ -16,6 +16,8 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+  var _paused = false;
+
   @override
   void initState() {
     super.initState();
@@ -76,19 +78,28 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               children: [
                 OutlinedButton.icon(
                   key: const Key('player.pause'),
-                  onPressed: () async =>
-                      (await ref.read(audioHandlerProvider)).pause(),
-                  icon: const Icon(Icons.pause),
-                  label: const Text('Pause'),
+                  onPressed: () async {
+                    final audioHandler = await ref.read(audioHandlerProvider);
+                    await audioHandler.togglePlayPause();
+                    if (!mounted) return;
+                    setState(() => _paused = !_paused);
+                    ref.read(ttsStatusProvider.notifier).state =
+                        _paused ? 'Paused' : 'Playing';
+                  },
+                  icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
+                  label: Text(_paused ? 'Resume' : 'Pause'),
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
                   key: const Key('player.stop'),
                   onPressed: () async {
+                    ref.read(ttsStopSignalProvider.notifier).state++;
                     final audioHandler = await ref.read(audioHandlerProvider);
                     await audioHandler.stop();
                     if (!mounted) return;
+                    setState(() => _paused = false);
                     ref.read(currentWordIndexProvider.notifier).state = 0;
+                    ref.read(ttsStatusProvider.notifier).state = 'Stopped';
                   },
                   icon: const Icon(Icons.stop),
                   label: const Text('Stop'),
