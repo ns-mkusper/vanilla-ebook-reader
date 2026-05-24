@@ -155,7 +155,7 @@ class TtsService implements SpeechService {
       for (var index = 0; index < chunks.length; index++) {
         _ref.read(ttsStatusProvider.notifier).state =
             'Preparing audio chunk ${index + 1} of ${chunks.length}...';
-        final chunkFile = chunks.length == 1
+        final chunkFile = index == 0
             ? generated
             : File(
                 '${cacheDir.path}/just_read_it_tts_chunk_${DateTime.now().microsecondsSinceEpoch}_$index.wav');
@@ -174,6 +174,15 @@ class TtsService implements SpeechService {
           throw StateError('System TTS produced empty WAV chunk $index.');
         }
         chunkFiles.add(chunkFile);
+        if (chunks.length > 1 && index == 0) {
+          await _playSynthesizedPlatformFile(
+            generated,
+            text: text,
+            config: config,
+            status: 'Playing chunk 1 of ${chunks.length}',
+          );
+          return;
+        }
       }
       if (chunkFiles.length > 1) {
         await stitchWavFiles(chunkFiles, generated);
@@ -186,6 +195,20 @@ class TtsService implements SpeechService {
       }
     }
 
+    await _playSynthesizedPlatformFile(
+      generated,
+      text: text,
+      config: config,
+      status: 'Playing',
+    );
+  }
+
+  Future<void> _playSynthesizedPlatformFile(
+    File generated, {
+    required String text,
+    required TtsConfig config,
+    required String status,
+  }) async {
     _ref.read(ttsStatusProvider.notifier).state = 'Starting media player...';
     final duration = await _wavDuration(generated);
     final audioHandler = await _ref.read(audioHandlerProvider);
@@ -194,7 +217,7 @@ class TtsService implements SpeechService {
       duration: duration,
       speed: config.rate,
     );
-    _ref.read(ttsStatusProvider.notifier).state = 'Playing';
+    _ref.read(ttsStatusProvider.notifier).state = status;
     _attachTextTimeline(text, duration, audioHandler);
   }
 
