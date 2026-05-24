@@ -171,6 +171,9 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   Stream<Duration> positionStream() => _player.positionStream;
+  Stream<int?> currentIndexStream() => _player.currentIndexStream;
+  Duration get position => _player.position;
+  int? get currentIndex => _player.currentIndex;
   Stream<bool> playingStream() => _player.playingStream;
   bool get isPlaying => _player.playing;
 

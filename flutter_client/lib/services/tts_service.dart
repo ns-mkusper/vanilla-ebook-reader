@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -22,6 +23,9 @@ final currentWordIndexProvider = StateProvider<int>((ref) => 0);
 final wordBoundariesProvider =
     StateProvider<List<TextWordBoundary>>((ref) => const []);
 final wordCuesProvider = StateProvider<List<WordCue>>((ref) => const []);
+final wordChunkOffsetsProvider = StateProvider<List<int>>((ref) => const []);
+final wordChunkDurationsProvider =
+    StateProvider<List<Duration>>((ref) => const []);
 final ttsStatusProvider = StateProvider<String>((ref) => 'Idle');
 final ttsStopSignalProvider = StateProvider<int>((ref) => 0);
 
@@ -215,6 +219,7 @@ class TtsService implements SpeechService {
           await _playInitialPlatformQueueFile(
             generated,
             fullText: text,
+            startupChunks: startupChunks,
             firstChunkText: chunks[index],
             config: config,
             status: 'Playing chunk 1 of $advertisedChunkCount',
@@ -258,6 +263,7 @@ class TtsService implements SpeechService {
   Future<Duration> _playInitialPlatformQueueFile(
     File generated, {
     required String fullText,
+    required List<String> startupChunks,
     required String firstChunkText,
     required TtsConfig config,
     required String status,
@@ -287,7 +293,13 @@ class TtsService implements SpeechService {
       return Duration.zero;
     }
     _ref.read(ttsStatusProvider.notifier).state = status;
-    _attachTextTimeline(fullText, totalDuration, audioHandler);
+    _attachChunkedTextTimeline(
+      fullText,
+      startupChunks,
+      totalDuration,
+      audioHandler,
+    );
+    _ref.read(wordChunkDurationsProvider.notifier).state = [duration];
     return duration;
   }
 
@@ -344,8 +356,16 @@ class TtsService implements SpeechService {
         debugPrint('Skipping empty synthesized queue chunk $chunkNumber.');
         continue;
       }
+      final chunkDuration = await _wavDuration(chunkFile);
+      final durations = List<Duration>.from(
+        _ref.read(wordChunkDurationsProvider),
+      )..add(chunkDuration);
+      _ref.read(wordChunkDurationsProvider.notifier).state = durations;
       await audioHandler.appendFileToQueue(chunkFile);
-      debugPrint('JRI_TTS_BUFFERED_CHUNK=$chunkNumber/$totalChunks');
+      debugPrint(
+        'JRI_TTS_BUFFERED_CHUNK=$chunkNumber/$totalChunks '
+        'durationMs=${chunkDuration.inMilliseconds}',
+      );
       if (_ref.read(ttsStatusProvider) != 'Paused') {
         _ref.read(ttsStatusProvider.notifier).state =
             'Playing chunk $chunkNumber of $totalChunks';
@@ -464,10 +484,44 @@ class TtsService implements SpeechService {
   ) {
     final boundaries = computeWordBoundaries(text);
     _ref.read(wordBoundariesProvider.notifier).state = boundaries;
+    _ref.read(wordChunkOffsetsProvider.notifier).state = const [0];
+    _ref.read(wordChunkDurationsProvider.notifier).state = [duration];
     final cues = buildWordCues(boundaries.length, duration);
     _ref.read(wordCuesProvider.notifier).state = cues;
     _ref.read(currentWordIndexProvider.notifier).state = 0;
     _attachTimeline(audioHandler, cues);
+  }
+
+  void _attachChunkedTextTimeline(
+    String text,
+    List<String> chunks,
+    Duration totalDuration,
+    TtsAudioHandler audioHandler,
+  ) {
+    final boundaries = computeWordBoundaries(text);
+    _ref.read(wordBoundariesProvider.notifier).state = boundaries;
+    final chunkWordCounts = chunks
+        .map((chunk) => computeWordBoundaries(chunk).length)
+        .where((count) => count > 0)
+        .toList(growable: false);
+    final offsets = <int>[];
+    var cursor = 0;
+    for (final count in chunkWordCounts) {
+      offsets.add(cursor);
+      cursor += count;
+    }
+    _ref.read(wordChunkOffsetsProvider.notifier).state =
+        offsets.isEmpty ? const [0] : offsets;
+    _ref.read(wordChunkDurationsProvider.notifier).state = const [];
+    final cues = buildWordCues(boundaries.length, totalDuration);
+    _ref.read(wordCuesProvider.notifier).state = cues;
+    _ref.read(currentWordIndexProvider.notifier).state = 0;
+    _attachChunkedTimeline(
+      audioHandler,
+      boundaries,
+      chunkWordCounts,
+      totalDuration,
+    );
   }
 
   void _attachTimeline(TtsAudioHandler handler, List<WordCue> cues) {
@@ -479,6 +533,60 @@ class TtsService implements SpeechService {
       final index = wordIndexForPosition(position, cues);
       _ref.read(currentWordIndexProvider.notifier).state = index;
     });
+  }
+
+  void _attachChunkedTimeline(
+    TtsAudioHandler handler,
+    List<TextWordBoundary> boundaries,
+    List<int> chunkWordCounts,
+    Duration fallbackTotalDuration,
+  ) {
+    _positionSub?.cancel();
+    if (boundaries.isEmpty || chunkWordCounts.isEmpty) {
+      return;
+    }
+    _positionSub = handler.positionStream().listen((position) {
+      final currentIndex = (handler.currentIndex ?? 0)
+          .clamp(0, chunkWordCounts.length - 1)
+          .toInt();
+      final chunkStartWord = _ref.read(wordChunkOffsetsProvider)[currentIndex];
+      final chunkWordCount = chunkWordCounts[currentIndex];
+      final nextChunkStart = currentIndex + 1 < chunkWordCounts.length
+          ? _ref.read(wordChunkOffsetsProvider)[currentIndex + 1]
+          : boundaries.length;
+      final effectiveChunkWords = min(
+        chunkWordCount,
+        max(1, nextChunkStart - chunkStartWord),
+      );
+      final durations = _ref.read(wordChunkDurationsProvider);
+      final chunkDuration = currentIndex < durations.length
+          ? durations[currentIndex]
+          : _estimateChunkDuration(
+              currentIndex: currentIndex,
+              chunkWordCounts: chunkWordCounts,
+              fallbackTotalDuration: fallbackTotalDuration,
+            );
+      final cues = buildWordCues(effectiveChunkWords, chunkDuration);
+      final localIndex = wordIndexForPosition(position, cues);
+      _ref.read(currentWordIndexProvider.notifier).state =
+          min(chunkStartWord + localIndex, boundaries.length - 1);
+    });
+  }
+
+  Duration _estimateChunkDuration({
+    required int currentIndex,
+    required List<int> chunkWordCounts,
+    required Duration fallbackTotalDuration,
+  }) {
+    final totalWords =
+        chunkWordCounts.fold<int>(0, (sum, count) => sum + count);
+    if (totalWords <= 0 || fallbackTotalDuration <= Duration.zero) {
+      return const Duration(seconds: 15);
+    }
+    final estimatedMs = fallbackTotalDuration.inMilliseconds *
+        chunkWordCounts[currentIndex] /
+        totalWords;
+    return Duration(milliseconds: estimatedMs.round().clamp(1000, 600000));
   }
 }
 
