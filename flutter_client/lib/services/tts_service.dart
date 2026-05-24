@@ -104,6 +104,7 @@ class TtsService implements SpeechService {
       return;
     }
     _ref.read(ttsStatusProvider.notifier).state = 'Preparing audio...';
+    unawaited(_ref.read(audioHandlerProvider));
 
     final repo = _ref.read(modelRepositoryProvider);
     final config = _ref.read(ttsConfigProvider);

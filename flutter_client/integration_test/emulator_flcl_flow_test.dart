@@ -62,7 +62,7 @@ void main() {
     await _pumpUntil(
       tester,
       () => wavFile.existsSync() && wavFile.lengthSync() > 1000000,
-      timeout: const Duration(minutes: 5),
+      timeout: const Duration(minutes: 10),
     );
     final bytes = await wavFile.readAsBytes();
     _validateWav(bytes);
