@@ -51,11 +51,12 @@ void main() {
     expect(
         restoredField.controller!.text, contains('Simple book speech fixture'));
 
-    // Default voice selection is visible in the real UI and used for playback.
+    // CI emulator does not install Flite, so the script starts this flow with
+    // JRI_DEFAULT_VOICE_ID=android-system. Real APK builds default to Flite.
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
-      'Android Male Voice',
+      'Android Default Voice',
     );
 
     await tester.tap(find.byKey(const Key('player.launch')).hitTestable());

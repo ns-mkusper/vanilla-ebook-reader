@@ -142,12 +142,17 @@ class TtsService implements SpeechService {
 
     final flutterTts = FlutterTts();
     await flutterTts.awaitSynthCompletion(true);
+    if (voice.backend == TtsEngineBackend.fliteClassic) {
+      await _configureFliteEngine(flutterTts, voice);
+    }
     await flutterTts.setLanguage(voice.androidVoiceLocale);
     await flutterTts.setVolume(1.0);
     await flutterTts.setSpeechRate(0.5);
     await flutterTts.setPitch(config.pitch.clamp(0.5, 2.0));
 
-    await _configurePlatformVoice(flutterTts, voice);
+    if (voice.backend == TtsEngineBackend.androidSystem) {
+      await _configureAndroidVoice(flutterTts, voice);
+    }
 
     final maxInputLength = await _platformMaxInputLength(flutterTts);
     final fullChunks = splitPlatformTtsText(text, maxChars: maxInputLength);
@@ -385,24 +390,35 @@ class TtsService implements SpeechService {
   }
 }
 
-Future<void> _configurePlatformVoice(
+Future<void> _configureFliteEngine(
   FlutterTts flutterTts,
   VoiceSelection voice,
 ) async {
-  if (voice.backend == TtsEngineBackend.fliteClassic) {
-    if (voice.androidEngine == null || !Platform.isAndroid) {
-      throw StateError('Classic Flite requires an Android Flite TTS engine.');
-    }
-    try {
-      await flutterTts.setEngine(voice.androidEngine!);
-    } catch (err) {
-      throw StateError(
-        'Classic Flite is unavailable. Install a Flite Android TTS engine or select another voice. ($err)',
-      );
-    }
-    return;
+  if (voice.androidEngine == null || !Platform.isAndroid) {
+    throw StateError(
+        'Motorola Male (Flite) requires an Android Flite TTS engine.');
   }
+  try {
+    final engines = await flutterTts.getEngines;
+    if (engines is Iterable && !engines.contains(voice.androidEngine)) {
+      throw StateError('installed engines: ${engines.join(', ')}');
+    }
+    final result = await flutterTts.setEngine(voice.androidEngine!);
+    if (result != 1) {
+      throw StateError('setEngine returned $result');
+    }
+    debugPrint('JRI_FLITE_ENGINE_SELECTED=${voice.androidEngine}');
+  } catch (err) {
+    throw StateError(
+      'Motorola Male (Flite) is unavailable. Install/select the Flite Android TTS engine or choose Android Default Voice. ($err)',
+    );
+  }
+}
 
+Future<void> _configureAndroidVoice(
+  FlutterTts flutterTts,
+  VoiceSelection voice,
+) async {
   if (voice.androidVoiceName == null) return;
   final selected = await _selectAndroidVoice(flutterTts, voice);
   if (!selected) {
@@ -423,7 +439,10 @@ Future<bool> _selectAndroidVoice(
     'locale': voice.androidVoiceLocale,
   };
   try {
-    await flutterTts.setVoice(selectedVoice);
+    final result = await flutterTts.setVoice(selectedVoice);
+    if (result != 1) {
+      return false;
+    }
     debugPrint(
       'JRI_ANDROID_VOICE_SELECTED=${selectedVoice['name']} '
       '${selectedVoice['locale']}',

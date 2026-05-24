@@ -32,7 +32,7 @@ void main() {
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
-      'Android Male Voice',
+      'Android Default Voice',
     );
 
     final launchTimer = Stopwatch()..start();

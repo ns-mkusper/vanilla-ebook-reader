@@ -103,7 +103,10 @@ class VoiceSelection {
   }
 }
 
-const defaultVoiceId = 'android-male';
+const defaultVoiceId = String.fromEnvironment(
+  'JRI_DEFAULT_VOICE_ID',
+  defaultValue: 'flite-classic',
+);
 
 const voiceModelPresets = <VoiceModelPreset>[
   VoiceModelPreset(
@@ -123,9 +126,9 @@ const voiceModelPresets = <VoiceModelPreset>[
   ),
   VoiceModelPreset(
     id: 'flite-classic',
-    label: 'Classic Flite (requires Flite engine)',
+    label: 'Motorola Male (Flite)',
     description:
-        'Uses the Flite Android TTS engine only when that engine is installed; otherwise the app reports that Flite is unavailable instead of silently using the default voice.',
+        'Uses the installed Flite Android TTS engine and its default Motorola-style male voice. If Flite is unavailable, playback fails explicitly instead of falling back to a female system voice.',
     backend: TtsEngineBackend.fliteClassic,
     androidEngine: 'edu.cmu.cs.speech.tts.flite',
   ),

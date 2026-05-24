@@ -63,10 +63,10 @@ void main() {
     expect(restoredField.controller!.text, geminiOutput);
   });
 
-  testWidgets('uses the default Android system voice for playback validation',
+  testWidgets('uses Motorola Male (Flite) as the default voice label',
       (tester) async {
     await _pumpApp(tester, tempDir, speech);
-    expect(find.text('Android Male Voice'), findsOneWidget);
+    expect(find.text('Motorola Male (Flite)'), findsOneWidget);
     await tester.enterText(
         find.byKey(const Key('editor.text')), 'Voice check text.');
     await tester.pump();
@@ -79,7 +79,7 @@ void main() {
     await tester.pump();
 
     expect(speech.lastText, 'Voice check text.');
-    expect(find.text('System voice: Android Male Voice'), findsOneWidget);
+    expect(find.text('Classic voice: Motorola Male (Flite)'), findsOneWidget);
   });
 }
 
