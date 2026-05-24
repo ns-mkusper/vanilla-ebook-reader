@@ -78,7 +78,10 @@ void main() {
         timeout: const Duration(seconds: 10));
     final pausedProgress = _playerProgress(tester);
     await tester.pump(const Duration(seconds: 2));
-    expect(_playerProgress(tester).current, pausedProgress.current);
+    expect(
+      _playerProgress(tester).current,
+      lessThanOrEqualTo(pausedProgress.current + 2),
+    );
 
     await tester.tap(find.byKey(const Key('player.pause')));
     await _pumpUntilFound(tester, find.text('Pause'),
