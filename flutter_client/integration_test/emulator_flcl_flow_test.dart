@@ -25,8 +25,9 @@ void main() {
     await _dismissSystemSettling(tester);
 
     await _importPath(tester, flclFile.path, contains('Tier 7: The Abyss'));
-    expect(_editorText(tester), contains('What does Fooly Cooly mean'));
-    expect(_editorText(tester), contains('See you Space Cowboy'));
+    final importedFlclText = _editorText(tester);
+    expect(importedFlclText, contains('What does Fooly Cooly mean'));
+    expect(importedFlclText, contains('See you Space Cowboy'));
 
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
     expect(
@@ -71,7 +72,7 @@ void main() {
     binding.reportData!['playbackWavName'] =
         'flcl_playback_sample_from_emulator.wav';
     binding.reportData!['validatedPlaybackSource'] = true;
-    binding.reportData!['flclFullTextLength'] = _editorText(tester).length;
+    binding.reportData!['flclFullTextLength'] = importedFlclText.length;
     debugPrint('JRI_FLCL_FULL_TEXT_PLAYBACK_VALIDATED bytes=${bytes.length}');
 
     await tester.tap(find.byKey(const Key('player.stop')));
