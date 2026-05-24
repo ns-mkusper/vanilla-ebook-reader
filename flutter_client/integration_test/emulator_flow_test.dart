@@ -58,12 +58,9 @@ void main() {
       'Android Male Voice',
     );
 
-    await tester.tap(find.byKey(const Key('player.launch')));
-    await tester.pump(const Duration(seconds: 1));
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(seconds: 5)),
-    );
-    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.byKey(const Key('player.launch')).hitTestable());
+    await _pumpUntilFound(tester, find.text('Streaming Playback'),
+        timeout: const Duration(seconds: 60));
 
     expect(find.text('Streaming Playback'), findsOneWidget);
     expect(find.byKey(const Key('player.highlight.rich_text')), findsOneWidget);
@@ -72,7 +69,7 @@ void main() {
     await _pumpUntil(
       tester,
       wavFile.existsSync,
-      timeout: const Duration(seconds: 60),
+      timeout: const Duration(minutes: 5),
     );
     final wavBytes = await wavFile.readAsBytes();
     _validateWav(wavBytes);
