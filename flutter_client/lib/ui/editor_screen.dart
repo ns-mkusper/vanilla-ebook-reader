@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'components.dart';
@@ -254,6 +255,8 @@ class _ImportPathDialogState extends State<_ImportPathDialog> {
   void _submit([String? value]) {
     if (_submitted) return;
     _submitted = true;
+    FocusScope.of(context).unfocus();
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     Navigator.of(context).pop((value ?? _pathController.text).trim());
   }
 

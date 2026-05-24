@@ -42,6 +42,8 @@ if ! grep -q '^RIFF' build/screenshots/voice_sample_from_emulator.wav; then
   exit 1
 fi
 python3 ../tools/validate_wav.py build/screenshots/voice_sample_from_emulator.wav
+test -s build/screenshots/flcl_playback_sample_from_emulator.wav
+python3 ../tools/validate_wav.py build/screenshots/flcl_playback_sample_from_emulator.wav
 python3 -m pip install --user vosk==0.3.45
 MODEL_DIR="build/screenshots/vosk-model-small-en-us-0.15"
 if [ ! -d "$MODEL_DIR" ]; then
@@ -64,6 +66,7 @@ rm -rf "$MODEL_DIR" build/screenshots/vosk-model.zip
 test -s build/screenshots/01_txt_import_editor.png
 test -s build/screenshots/02_player_playback.png
 test -s build/screenshots/voice_sample_from_emulator.wav
+test -s build/screenshots/flcl_playback_sample_from_emulator.wav
 python3 ../tools/validate_pngs.py \
   build/screenshots/01_txt_import_editor.png \
   build/screenshots/02_player_playback.png

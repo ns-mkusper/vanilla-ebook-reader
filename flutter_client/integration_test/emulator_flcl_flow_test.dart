@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -9,7 +10,7 @@ import 'package:just_read_it/main.dart' as app;
 import 'package:path_provider/path_provider.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('full FLCL markdown import starts real playback', (tester) async {
     final tempDir = await getTemporaryDirectory();
@@ -33,10 +34,9 @@ void main() {
       'Android Male Voice',
     );
 
-    await tester.tap(find.byKey(const Key('player.launch')),
-        warnIfMissed: false);
+    await _tapLaunchButton(tester);
     await _pumpUntilFound(tester, find.text('Streaming Playback'),
-        timeout: const Duration(seconds: 15));
+        timeout: const Duration(seconds: 60));
     await _pumpUntilFound(tester, find.byKey(const Key('player.status')),
         timeout: const Duration(seconds: 10));
     await _pumpUntil(
@@ -62,6 +62,12 @@ void main() {
     );
     final bytes = await wavFile.readAsBytes();
     _validateWav(bytes);
+    binding.reportData ??= <String, dynamic>{};
+    binding.reportData!['playbackWavBase64'] = base64Encode(bytes);
+    binding.reportData!['playbackWavName'] =
+        'flcl_playback_sample_from_emulator.wav';
+    binding.reportData!['validatedPlaybackSource'] = true;
+    binding.reportData!['flclFullTextLength'] = _editorText(tester).length;
     debugPrint('JRI_FLCL_FULL_TEXT_PLAYBACK_VALIDATED bytes=${bytes.length}');
 
     await tester.tap(find.byKey(const Key('player.stop')));
@@ -72,6 +78,24 @@ void main() {
 Future<void> _dismissSystemSettling(WidgetTester tester) async {
   await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 2)));
   await tester.pump(const Duration(milliseconds: 500));
+}
+
+Future<void> _tapLaunchButton(WidgetTester tester) async {
+  final launchButton = find.byKey(const Key('player.launch'));
+  await _pumpUntilFound(tester, launchButton,
+      timeout: const Duration(seconds: 15));
+  await tester.pump(const Duration(milliseconds: 500));
+  final button = tester.widget<ElevatedButton>(launchButton);
+  expect(button.enabled, isTrue,
+      reason: 'Read Aloud must be enabled after importing the full FLCL text.');
+
+  await tester.ensureVisible(launchButton);
+  await tester.pump(const Duration(milliseconds: 300));
+
+  final center = tester.getCenter(launchButton);
+  debugPrint('JRI_FLCL_TAP_READ_ALOUD center=$center');
+  await tester.tapAt(center);
+  await tester.pump(const Duration(seconds: 1));
 }
 
 Future<void> _importPath(
