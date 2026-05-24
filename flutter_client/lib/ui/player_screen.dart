@@ -85,7 +85,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 FilledButton.icon(
                   key: const Key('player.stop'),
                   onPressed: () async {
-                    await (await ref.read(audioHandlerProvider)).stop();
+                    final audioHandler = await ref.read(audioHandlerProvider);
+                    await audioHandler.stop();
+                    if (!mounted) return;
                     ref.read(currentWordIndexProvider.notifier).state = 0;
                   },
                   icon: const Icon(Icons.stop),
