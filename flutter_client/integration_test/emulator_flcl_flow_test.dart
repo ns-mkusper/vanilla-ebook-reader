@@ -34,6 +34,9 @@ void main() {
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
       'Android Default Voice',
     );
+    await tester.drag(
+        find.byKey(const Key('playback.speed')), const Offset(500, 0));
+    await tester.pump(const Duration(milliseconds: 300));
 
     final launchTimer = Stopwatch()..start();
     await _tapLaunchButton(tester);
@@ -70,6 +73,29 @@ void main() {
     debugPrint(
       'JRI_FLCL_PLAYBACK_PROOF_MS=${launchTimer.elapsedMilliseconds}',
     );
+    await tester.tap(find.byKey(const Key('player.pause')));
+    await _pumpUntilFound(tester, find.text('Resume'),
+        timeout: const Duration(seconds: 10));
+    final pausedProgress = _playerProgress(tester);
+    await tester.pump(const Duration(seconds: 2));
+    expect(_playerProgress(tester).current, pausedProgress.current);
+
+    await tester.tap(find.byKey(const Key('player.pause')));
+    await _pumpUntilFound(tester, find.text('Pause'),
+        timeout: const Duration(seconds: 10));
+    await _pumpUntil(
+      tester,
+      () {
+        final progress = _playerProgress(tester);
+        return progress.total > 0 && progress.current >= progress.total ~/ 2;
+      },
+      timeout: const Duration(minutes: 3),
+    );
+    final halfProgress = _playerProgress(tester);
+    debugPrint(
+      'JRI_FLCL_HALF_PLAYBACK_VALIDATED word=${halfProgress.current} total=${halfProgress.total}',
+    );
+
     final bytes = await wavFile.readAsBytes();
     _validateWav(bytes);
     binding.reportData ??= <String, dynamic>{};
@@ -149,6 +175,24 @@ Future<void> _openImportDialog(WidgetTester tester) async {
 String _editorText(WidgetTester tester) {
   final field = tester.widget<TextField>(find.byKey(const Key('editor.text')));
   return field.controller!.text;
+}
+
+_PlayerProgress _playerProgress(WidgetTester tester) {
+  final text =
+      tester.widget<Text>(find.byKey(const Key('player.progress'))).data ?? '';
+  final match = RegExp(r'Word (\d+) of (\d+)').firstMatch(text);
+  if (match == null) return const _PlayerProgress(0, 0);
+  return _PlayerProgress(
+    int.parse(match.group(1)!),
+    int.parse(match.group(2)!),
+  );
+}
+
+class _PlayerProgress {
+  const _PlayerProgress(this.current, this.total);
+
+  final int current;
+  final int total;
 }
 
 String _expectedNeedle(Matcher matcher) {

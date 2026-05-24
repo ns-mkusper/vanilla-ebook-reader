@@ -26,6 +26,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
 
   final AudioPlayer _player = AudioPlayer();
   MediaItem? _currentItem;
+  ConcatenatingAudioSource? _activePlaylist;
 
   Future<Duration> playPcm(
     Uint8List pcmBytes,
@@ -66,6 +67,33 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     return duration;
   }
 
+  Future<Duration> playFileQueue(
+    File file, {
+    required Duration duration,
+    required Duration totalDuration,
+    double speed = 1.0,
+  }) async {
+    final playlist = ConcatenatingAudioSource(
+      children: [AudioSource.uri(file.uri)],
+      useLazyPreparation: false,
+    );
+    await _playSource(
+      playlist,
+      id: file.uri.toString(),
+      duration: totalDuration,
+      speed: speed,
+      playbackExportFile: file,
+    );
+    return duration;
+  }
+
+  Future<void> appendFileToQueue(File file) async {
+    final playlist = _activePlaylist;
+    if (playlist == null) return;
+    await playlist.add(AudioSource.uri(file.uri));
+    debugPrint('JRI_PLAYLIST_CHUNK_APPENDED count=${playlist.children.length}');
+  }
+
   Future<void> _playSource(
     AudioSource source, {
     required String id,
@@ -74,6 +102,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     Uint8List? playbackExportBytes,
     File? playbackExportFile,
   }) async {
+    _activePlaylist = source is ConcatenatingAudioSource ? source : null;
     _currentItem = MediaItem(
       id: id,
       album: 'Just Read It',
@@ -166,6 +195,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> stop() async {
+    _activePlaylist = null;
     await _player.pause();
     await _player.seek(Duration.zero);
     await _player.stop();

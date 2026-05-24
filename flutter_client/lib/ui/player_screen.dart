@@ -107,6 +107,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               ],
             ),
             const SizedBox(height: 12),
+            Text(
+              'Word ${effectiveBoundaries.isEmpty ? 0 : wordIndex + 1} of ${effectiveBoundaries.length}',
+              key: const Key('player.progress'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
             const Text('Live Highlight', key: Key('player.highlight.label')),
             const SizedBox(height: 12),
             Expanded(

@@ -212,9 +212,10 @@ class TtsService implements SpeechService {
         }
         chunkFiles.add(chunkFile);
         if (lowLatencyStartup && index == 0) {
-          await _playSynthesizedPlatformFile(
+          await _playInitialPlatformQueueFile(
             generated,
-            text: text,
+            fullText: text,
+            firstChunkText: chunks[index],
             config: config,
             status: 'Playing chunk 1 of $advertisedChunkCount',
             stopSignal: stopSignal,
@@ -223,6 +224,14 @@ class TtsService implements SpeechService {
             'JRI_TTS_FIRST_AUDIO_READY_MS=${startupTimer.elapsedMilliseconds} '
             'chars=${chunks[index].length} totalChars=${text.length}',
           );
+          unawaited(_synthesizeAndAppendPlatformChunks(
+            flutterTts,
+            startupChunks.skip(1).toList(),
+            cacheDir,
+            stopSignal: stopSignal,
+            audioHandler: await _ref.read(audioHandlerProvider),
+            totalChunks: advertisedChunkCount,
+          ));
           return;
         }
       }
@@ -244,6 +253,42 @@ class TtsService implements SpeechService {
       status: 'Playing',
       stopSignal: stopSignal,
     );
+  }
+
+  Future<Duration> _playInitialPlatformQueueFile(
+    File generated, {
+    required String fullText,
+    required String firstChunkText,
+    required TtsConfig config,
+    required String status,
+    required int stopSignal,
+  }) async {
+    if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+      _ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+      return Duration.zero;
+    }
+    _ref.read(ttsStatusProvider.notifier).state = 'Starting media player...';
+    final duration = await _wavDuration(generated);
+    final totalDuration = _estimateFullDuration(
+      totalChars: fullText.length,
+      firstChunkChars: firstChunkText.length,
+      firstDuration: duration,
+    );
+    final audioHandler = await _ref.read(audioHandlerProvider);
+    await audioHandler.playFileQueue(
+      generated,
+      duration: duration,
+      totalDuration: totalDuration,
+      speed: config.rate,
+    );
+    if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+      await audioHandler.stop();
+      _ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+      return Duration.zero;
+    }
+    _ref.read(ttsStatusProvider.notifier).state = status;
+    _attachTextTimeline(fullText, totalDuration, audioHandler);
+    return duration;
   }
 
   Future<void> _playSynthesizedPlatformFile(
@@ -272,6 +317,53 @@ class TtsService implements SpeechService {
     }
     _ref.read(ttsStatusProvider.notifier).state = status;
     _attachTextTimeline(text, duration, audioHandler);
+  }
+
+  Future<void> _synthesizeAndAppendPlatformChunks(
+    FlutterTts flutterTts,
+    List<String> chunks,
+    Directory cacheDir, {
+    required int stopSignal,
+    required TtsAudioHandler audioHandler,
+    required int totalChunks,
+  }) async {
+    for (var index = 0; index < chunks.length; index++) {
+      if (_ref.read(ttsStopSignalProvider) != stopSignal) return;
+      final chunkNumber = index + 2;
+      _ref.read(ttsStatusProvider.notifier).state =
+          'Preparing audio chunk $chunkNumber of $totalChunks...';
+      final chunkFile = File(
+        '${cacheDir.path}/just_read_it_tts_queue_${DateTime.now().microsecondsSinceEpoch}_$index.wav',
+      );
+      await flutterTts.synthesizeToFile(chunks[index], chunkFile.path, true);
+      if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+        if (await chunkFile.exists()) await chunkFile.delete();
+        return;
+      }
+      if (!await chunkFile.exists() || await chunkFile.length() <= 44) {
+        debugPrint('Skipping empty synthesized queue chunk $chunkNumber.');
+        continue;
+      }
+      await audioHandler.appendFileToQueue(chunkFile);
+      debugPrint('JRI_TTS_BUFFERED_CHUNK=$chunkNumber/$totalChunks');
+      if (_ref.read(ttsStatusProvider) != 'Paused') {
+        _ref.read(ttsStatusProvider.notifier).state =
+            'Playing chunk $chunkNumber of $totalChunks';
+      }
+    }
+  }
+
+  Duration _estimateFullDuration({
+    required int totalChars,
+    required int firstChunkChars,
+    required Duration firstDuration,
+  }) {
+    if (firstChunkChars <= 0 || firstDuration <= Duration.zero) {
+      return const Duration(seconds: 1);
+    }
+    final estimatedMs =
+        firstDuration.inMilliseconds * totalChars / firstChunkChars;
+    return Duration(milliseconds: estimatedMs.round().clamp(1000, 86400000));
   }
 
   Future<void> _speakWithRustPiper(
