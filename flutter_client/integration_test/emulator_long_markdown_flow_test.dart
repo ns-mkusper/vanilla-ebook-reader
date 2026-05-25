@@ -34,7 +34,7 @@ void main() {
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
-      'Motorola Male (Flite)',
+      'Android Default Voice',
     );
     await tester.drag(
         find.byKey(const Key('playback.speed')), const Offset(500, 0));
