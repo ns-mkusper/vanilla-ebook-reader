@@ -61,6 +61,7 @@ fn fetch_flite(destination: &Path) {
 }
 
 const FLITE_FILES: &[&str] = &[
+    "src/audio/au_streaming.c",
     "src/cg/cst_cg.c",
     "src/cg/cst_cg_map.c",
     "src/cg/cst_mlpg.c",
