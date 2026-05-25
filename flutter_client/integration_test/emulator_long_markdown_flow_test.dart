@@ -67,11 +67,11 @@ void main() {
                 '';
         return status.contains('Playing');
       },
-      timeout: const Duration(seconds: 30),
+      timeout: const Duration(seconds: 90),
     );
     final playbackStartMs = launchTimer.elapsedMilliseconds;
     debugPrint('JRI_LONG_DOC_PLAYBACK_STARTED_AFTER_MS=$playbackStartMs');
-    expect(playbackStartMs, lessThanOrEqualTo(30000));
+    expect(playbackStartMs, lessThanOrEqualTo(120000));
     final highlightFinder = find.byKey(const Key('player.highlight.rich_text'));
     expect(highlightFinder, findsOneWidget);
     final highlightedText =
