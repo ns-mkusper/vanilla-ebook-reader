@@ -195,7 +195,9 @@ fn resolve_engine(
             }
             #[cfg(not(feature = "flite"))]
             {
-                Err(RegistryError::LoadFailed("embedded Flite backend not compiled in this build".to_string()))
+                Err(RegistryError::LoadFailed(
+                    "embedded Flite backend not compiled in this build".to_string(),
+                ))
             }
         }
         EngineBackend::Piper(config) => {

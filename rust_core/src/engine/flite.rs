@@ -58,7 +58,9 @@ impl TTSEngine for FliteEngine {
             } else {
                 raw_samples
                     .chunks(channels)
-                    .map(|frame| frame.iter().map(|sample| *sample as i32).sum::<i32>() / channels as i32)
+                    .map(|frame| {
+                        frame.iter().map(|sample| *sample as i32).sum::<i32>() / channels as i32
+                    })
                     .map(|sample| sample.clamp(i16::MIN as i32, i16::MAX as i32) as i16)
                     .collect()
             };
