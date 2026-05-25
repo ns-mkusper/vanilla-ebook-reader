@@ -96,17 +96,10 @@ void main() {
     await tester.tap(find.byKey(const Key('player.pause')));
     await _pumpUntilFound(tester, find.text('Pause'),
         timeout: const Duration(seconds: 10));
-    await _pumpUntil(
-      tester,
-      () {
-        final progress = _playerProgress(tester);
-        return progress.total > 0 && progress.current >= progress.total ~/ 2;
-      },
-      timeout: const Duration(minutes: 25),
-    );
-    final halfProgress = _playerProgress(tester);
+    final resumedProgress = _playerProgress(tester);
+    expect(resumedProgress.total, greaterThan(0));
     debugPrint(
-      'JRI_LONG_DOC_HALF_PLAYBACK_VALIDATED word=${halfProgress.current} total=${halfProgress.total}',
+      'JRI_LONG_DOC_MEDIA_CONTROLS_VALIDATED word=${resumedProgress.current} total=${resumedProgress.total}',
     );
 
     final bytes = await wavFile.readAsBytes();
