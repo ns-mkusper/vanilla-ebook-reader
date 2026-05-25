@@ -228,14 +228,19 @@ class TtsService implements SpeechService {
             'JRI_TTS_FIRST_AUDIO_READY_MS=${startupTimer.elapsedMilliseconds} '
             'chars=${chunks[index].length} totalChars=${text.length}',
           );
-          unawaited(_synthesizeAndAppendPlatformChunks(
-            flutterTts,
-            startupChunks.skip(1).toList(),
-            cacheDir,
-            stopSignal: stopSignal,
-            audioHandler: await _ref.read(audioHandlerProvider),
-            totalChunks: advertisedChunkCount,
-          ));
+          const disableBackgroundQueue = bool.fromEnvironment(
+            'JRI_DISABLE_BACKGROUND_TTS_QUEUE',
+          );
+          if (!disableBackgroundQueue) {
+            unawaited(_synthesizeAndAppendPlatformChunks(
+              flutterTts,
+              startupChunks.skip(1).toList(),
+              cacheDir,
+              stopSignal: stopSignal,
+              audioHandler: await _ref.read(audioHandlerProvider),
+              totalChunks: advertisedChunkCount,
+            ));
+          }
           return;
         }
       }
