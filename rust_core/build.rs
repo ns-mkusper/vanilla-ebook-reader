@@ -4,6 +4,10 @@ use std::process::Command;
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
+    if std::env::var_os("CARGO_FEATURE_FLITE").is_none() {
+        return;
+    }
+
     let flite = flite_source_dir();
     println!("cargo:rerun-if-changed={}", flite.display());
 
