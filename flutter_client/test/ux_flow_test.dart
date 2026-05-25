@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_read_it/main.dart';
+import 'package:just_read_it/services/document_picker.dart';
 import 'package:just_read_it/services/document_repository.dart';
 import 'package:just_read_it/services/tts_service.dart';
 
@@ -81,6 +84,43 @@ void main() {
     expect(speech.lastText, 'Voice check text.');
     expect(find.text('Streaming Playback'), findsOneWidget);
   });
+
+  testWidgets('imports picked markdown bytes from file browser without a path',
+      (tester) async {
+    final picker = _FakeDocumentPicker(
+      PickedDocumentFile(
+        name: 'drive_note.md',
+        bytes: Uint8List.fromList(
+          utf8.encode('# Drive note\nFile browser import fixture.'),
+        ),
+      ),
+    );
+    final repository = _ImmediateDocumentRepository(directory: tempDir);
+    await _pumpApp(
+      tester,
+      tempDir,
+      speech,
+      picker: picker,
+      repository: repository,
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    await tester.ensureVisible(find.byKey(const Key('document.import')));
+    await tester.tap(find.byKey(const Key('document.import')));
+    expect(picker.calls, 1);
+    await tester.pump();
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+    final editor =
+        tester.widget<TextField>(find.byKey(const Key('editor.text')));
+    expect(editor.controller!.text, contains('File browser import fixture.'));
+    expect(find.textContaining('Imported drive_note'), findsOneWidget);
+
+    expect(repository.importedDocument?.sourcePath, isNull);
+  });
 }
 
 void _setSurface(WidgetTester tester, Size logicalSize) {
@@ -93,16 +133,21 @@ void _setSurface(WidgetTester tester, Size logicalSize) {
 Future<void> _pumpApp(
   WidgetTester tester,
   Directory tempDir,
-  _RecordingSpeechService speech,
-) async {
+  _RecordingSpeechService speech, {
+  DocumentPicker? picker,
+  DocumentRepository? repository,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         documentDirectoryProvider.overrideWith((ref) async => tempDir),
         documentRepositoryProvider.overrideWithValue(
-          DocumentRepository(directory: tempDir),
+          repository ?? DocumentRepository(directory: tempDir),
         ),
         ttsServiceProvider.overrideWithValue(speech),
+        documentPickerProvider.overrideWithValue(
+          picker ?? _FakeDocumentPicker(null),
+        ),
       ],
       child: const TtsApp(),
     ),
@@ -116,5 +161,38 @@ class _RecordingSpeechService implements SpeechService {
   @override
   Future<void> speak(String rawText) async {
     lastText = rawText;
+  }
+}
+
+class _ImmediateDocumentRepository extends DocumentRepository {
+  _ImmediateDocumentRepository({required super.directory});
+
+  ReaderDocument? importedDocument;
+
+  @override
+  Future<ReaderDocument> importBytes({
+    required String name,
+    required Uint8List bytes,
+    String? sourcePath,
+  }) async {
+    importedDocument = ReaderDocument(
+      title: name.replaceFirst(RegExp(r'\.[^.]*$'), ''),
+      text: utf8.decode(bytes, allowMalformed: true),
+      sourcePath: sourcePath,
+    );
+    return importedDocument!;
+  }
+}
+
+class _FakeDocumentPicker implements DocumentPicker {
+  _FakeDocumentPicker(this.file);
+
+  final PickedDocumentFile? file;
+  var calls = 0;
+
+  @override
+  Future<PickedDocumentFile?> pickReadableDocument() async {
+    calls += 1;
+    return file;
   }
 }

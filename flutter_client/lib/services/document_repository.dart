@@ -73,41 +73,57 @@ class DocumentRepository {
   }
 
   Future<ReaderDocument> importPath(String path) async {
-    final extension = p.extension(path).toLowerCase();
-    if (extension == '.txt' || extension == '.md' || extension == '.text') {
-      return importTextFile(File(path));
+    final bytes = await File(path).readAsBytes();
+    return importBytes(
+      name: p.basename(path),
+      bytes: bytes,
+      sourcePath: path,
+    );
+  }
+
+  Future<ReaderDocument> importBytes({
+    required String name,
+    required Uint8List bytes,
+    String? sourcePath,
+  }) async {
+    final extension = p.extension(name).toLowerCase();
+    final text = switch (extension) {
+      '.txt' ||
+      '.text' ||
+      '.md' ||
+      '.markdown' =>
+        utf8.decode(bytes, allowMalformed: true),
+      '.epub' => EpubTextExtractor.extract(bytes),
+      _ => throw UnsupportedError(
+          'Unsupported file type "$extension". Use .txt, .md, or .epub.',
+        ),
+    };
+    if (text.trim().isEmpty) {
+      throw const FormatException('No readable text found in file.');
     }
-    if (extension == '.epub') {
-      return importEpubFile(File(path));
-    }
-    throw UnsupportedError(
-        'Unsupported file type "$extension". Use .txt or .epub.');
+    final document = ReaderDocument(
+      title: _titleFromPath(name),
+      text: text,
+      sourcePath: sourcePath,
+    );
+    await saveDraft(document);
+    return document;
   }
 
   Future<ReaderDocument> importTextFile(File file) async {
-    final text = await file.readAsString();
-    final document = ReaderDocument(
-      title: _titleFromPath(file.path),
-      text: text,
+    return importBytes(
+      name: p.basename(file.path),
+      bytes: await file.readAsBytes(),
       sourcePath: file.path,
     );
-    await saveDraft(document);
-    return document;
   }
 
   Future<ReaderDocument> importEpubFile(File file) async {
-    final bytes = await file.readAsBytes();
-    final text = EpubTextExtractor.extract(bytes);
-    if (text.trim().isEmpty) {
-      throw const FormatException('No readable text found in EPUB.');
-    }
-    final document = ReaderDocument(
-      title: _titleFromPath(file.path),
-      text: text,
+    return importBytes(
+      name: p.basename(file.path),
+      bytes: await file.readAsBytes(),
       sourcePath: file.path,
     );
-    await saveDraft(document);
-    return document;
   }
 
   Future<Directory> _ensureDirectory() async {

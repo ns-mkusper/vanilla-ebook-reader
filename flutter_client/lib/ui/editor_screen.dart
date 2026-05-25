@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'components.dart';
+import '../services/document_picker.dart';
 import '../services/document_repository.dart';
 import '../services/text_analysis.dart';
 import '../services/tts_service.dart';
@@ -130,7 +131,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                     key: const Key('document.import'),
                     icon: const Icon(Icons.upload_file),
                     label: const Text('Import'),
-                    onPressed: _showImportDialog,
+                    onPressed: _importFromFileBrowser,
                   ),
                 ],
               ),
@@ -185,14 +186,44 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     );
   }
 
-  Future<void> _showImportDialog() async {
+  Future<void> _importFromFileBrowser() async {
+    const enablePathDialog = bool.fromEnvironment(
+      'JRI_ENABLE_IMPORT_PATH_DIALOG',
+    );
+    if (enablePathDialog) {
+      await _showImportPathDialog();
+      return;
+    }
+
+    setState(() {
+      _status = 'Opening file browser...';
+    });
+    try {
+      final picked =
+          await ref.read(documentPickerProvider).pickReadableDocument();
+      if (picked == null) {
+        if (!mounted) return;
+        setState(() => _status = 'Import cancelled.');
+        return;
+      }
+      final repository = ref.read(documentRepositoryProvider);
+      final document = await repository.importBytes(
+        name: picked.name,
+        bytes: picked.bytes,
+        sourcePath: picked.path,
+      );
+      _applyImportedDocument(document);
+    } catch (err) {
+      _showImportFailure(err);
+    }
+  }
+
+  Future<void> _showImportPathDialog() async {
     final path = await showDialog<String>(
       context: context,
       builder: (context) => const _ImportPathDialog(),
     );
-    if (path == null || path.trim().isEmpty) {
-      return;
-    }
+    if (path == null || path.trim().isEmpty) return;
     await _importPath(path.trim());
   }
 
@@ -203,21 +234,28 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     try {
       final repository = ref.read(documentRepositoryProvider);
       final document = await repository.importPath(path);
-      await repository.saveDraft(document);
-      if (!mounted) return;
-      _hydrating = true;
-      _controller.text = document.text;
-      setState(() {
-        _title = document.title;
-        _status = 'Imported ${document.title}';
-        _hydrating = false;
-      });
+      _applyImportedDocument(document);
     } catch (err) {
-      if (!mounted) return;
-      setState(() {
-        _status = 'Import failed: $err';
-      });
+      _showImportFailure(err);
     }
+  }
+
+  void _applyImportedDocument(ReaderDocument document) {
+    if (!mounted) return;
+    _hydrating = true;
+    _controller.text = document.text;
+    setState(() {
+      _title = document.title;
+      _status = 'Imported ${document.title}';
+      _hydrating = false;
+    });
+  }
+
+  void _showImportFailure(Object err) {
+    if (!mounted) return;
+    setState(() {
+      _status = 'Import failed: $err';
+    });
   }
 
   Future<void> _startNewDocument() async {

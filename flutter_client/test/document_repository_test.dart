@@ -41,6 +41,24 @@ void main() {
     expect(restored.text, sample);
   });
 
+  test('imports in-memory markdown bytes from Android document providers',
+      () async {
+    final document = await repository.importBytes(
+      name: 'Drive Fixture.md',
+      bytes: Uint8List.fromList(
+        utf8.encode('# Provider-backed note\nImported via content bytes.'),
+      ),
+    );
+
+    expect(document.title, 'Drive Fixture');
+    expect(document.sourcePath, isNull);
+    expect(document.text, contains('Provider-backed note'));
+
+    final restored = await repository.loadDraft();
+    expect(restored.title, 'Drive Fixture');
+    expect(restored.text, contains('Imported via content bytes.'));
+  });
+
   test('extracts readable text from a copyright-free EPUB sample', () async {
     final epub = File('${tempDir.path}/open-sample.epub');
     await epub.writeAsBytes(_sampleEpubBytes());
