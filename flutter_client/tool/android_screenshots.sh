@@ -12,13 +12,17 @@ flutter drive \
 
 flutter drive \
   --driver=test_driver/integration_test.dart \
-  --target=integration_test/emulator_flcl_flow_test.dart \
+  --target=integration_test/emulator_long_markdown_flow_test.dart \
   -d emulator-5554 \
   --dart-define=JRI_EXPORT_TTS_WAV=true \
   >> build/screenshots/flutter-run.log 2>&1
 
-if ! grep -q "JRI_FLCL_FULL_TEXT_PLAYBACK_VALIDATED" build/screenshots/flutter-run.log; then
-  echo "Full FLCL markdown playback was not validated" >&2
+if ! grep -q "JRI_LONG_DOC_FULL_TEXT_PLAYBACK_VALIDATED" build/screenshots/flutter-run.log; then
+  echo "Full long markdown playback was not validated" >&2
+  exit 1
+fi
+if ! grep -q "JRI_LONG_DOC_PLAYBACK_STARTED_AFTER_MS" build/screenshots/flutter-run.log; then
+  echo "Long document playback-start latency was not measured" >&2
   exit 1
 fi
 
@@ -43,8 +47,8 @@ if ! grep -q '^RIFF' build/screenshots/voice_sample_from_emulator.wav; then
   exit 1
 fi
 python3 ../tools/validate_wav.py build/screenshots/voice_sample_from_emulator.wav
-test -s build/screenshots/flcl_playback_sample_from_emulator.wav
-python3 ../tools/validate_wav.py build/screenshots/flcl_playback_sample_from_emulator.wav
+test -s build/screenshots/long_markdown_playback_sample_from_emulator.wav
+python3 ../tools/validate_wav.py build/screenshots/long_markdown_playback_sample_from_emulator.wav
 python3 -m pip install --user vosk==0.3.45
 MODEL_DIR="build/screenshots/vosk-model-small-en-us-0.15"
 if [ ! -d "$MODEL_DIR" ]; then
@@ -67,7 +71,7 @@ rm -rf "$MODEL_DIR" build/screenshots/vosk-model.zip
 test -s build/screenshots/01_txt_import_editor.png
 test -s build/screenshots/02_player_playback.png
 test -s build/screenshots/voice_sample_from_emulator.wav
-test -s build/screenshots/flcl_playback_sample_from_emulator.wav
+test -s build/screenshots/long_markdown_playback_sample_from_emulator.wav
 python3 ../tools/validate_pngs.py \
   build/screenshots/01_txt_import_editor.png \
   build/screenshots/02_player_playback.png

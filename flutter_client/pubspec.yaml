@@ -38,4 +38,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/models/en_us_amy_low.onnx.json
-    - test/fixtures/flcl_lore.md
+    - test/fixtures/long_markdown_fixture.md

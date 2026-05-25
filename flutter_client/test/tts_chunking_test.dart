@@ -7,14 +7,14 @@ import 'package:just_read_it/services/tts_service.dart';
 void main() {
   test('splits long markdown into bounded platform TTS chunks without loss',
       () async {
-    final fixture = await File('test/fixtures/flcl_lore.md').readAsString();
+    final fixture = await File('test/fixtures/long_markdown_fixture.md').readAsString();
     final chunks = splitPlatformTtsText(fixture, maxChars: 900);
 
     expect(fixture.length, greaterThan(8000));
     expect(chunks.length, greaterThan(8));
     expect(chunks.every((chunk) => chunk.length <= 900), isTrue);
-    expect(chunks.join('\n\n'), contains('What does Fooly Cooly mean'));
-    expect(chunks.join('\n\n'), contains('See you Space Cowboy'));
+    expect(chunks.join('\n\n'), contains('What does long-form markdown fixture mean'));
+    expect(chunks.join('\n\n'), contains('See you at the end'));
     expect(chunks.join('\n\n').replaceAll(RegExp(r'\s+'), ' '),
         contains('Naota projects his feelings of abandonment onto Haruko'));
   });
