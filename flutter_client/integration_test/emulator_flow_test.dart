@@ -51,12 +51,13 @@ void main() {
     expect(
         restoredField.controller!.text, contains('Simple book speech fixture'));
 
-    // CI emulator does not install Flite, so the script starts this flow with
-    // JRI_DEFAULT_VOICE_ID=android-system. Real APK builds default to Flite.
+    // Keep the short emulator flow on the real app default embedded Flite
+    // voice. The long-document guard below uses Android system TTS because the
+    // x86_64 CI emulator is too slow for long embedded synthesis.
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
-      'Android Default Voice',
+      'Motorola Male (Flite)',
     );
 
     await tester.tap(find.byKey(const Key('player.launch')).hitTestable());

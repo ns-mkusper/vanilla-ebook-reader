@@ -7,7 +7,6 @@ flutter drive \
   --target=integration_test/emulator_flow_test.dart \
   -d emulator-5554 \
   --dart-define=JRI_EXPORT_TTS_WAV=true \
-  --dart-define=JRI_DEFAULT_VOICE_ID=android-system \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
   > build/screenshots/flutter-run.log 2>&1
 
