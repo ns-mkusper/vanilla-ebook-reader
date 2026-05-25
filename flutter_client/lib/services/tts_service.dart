@@ -124,6 +124,7 @@ class TtsService implements SpeechService {
       case TtsEngineBackend.androidSystem:
         await _speakWithPlatformTts(text, voice, config, stopSignal);
       case TtsEngineBackend.fliteClassic:
+        await _speakWithChunkedRustFlite(text, voice, config, stopSignal);
       case TtsEngineBackend.piper:
         await _speakWithRustEngine(text, voice, config, stopSignal);
     }
@@ -384,6 +385,70 @@ class TtsService implements SpeechService {
     return Duration(milliseconds: estimatedMs.round().clamp(1000, 86400000));
   }
 
+  Future<void> _speakWithChunkedRustFlite(
+    String text,
+    VoiceSelection voice,
+    TtsConfig config,
+    int stopSignal,
+  ) async {
+    await initializeTtsBridge();
+    final chunks = splitPlatformTtsText(
+      text,
+      maxChars: _platformStartupChunkMaxChars,
+    );
+    if (chunks.isEmpty) return;
+
+    final startupTimer = Stopwatch()..start();
+    _ref.read(ttsStatusProvider.notifier).state =
+        'Preparing instant playback...';
+    final cacheDir = await getTemporaryDirectory();
+    final firstChunk = await _synthesizeRustPcm(
+      chunks.first,
+      const bridge.EngineBackend.flite(),
+      voice,
+    );
+    final firstFile = await _writePcmWav(
+      firstChunk.pcmBytes,
+      firstChunk.sampleRate,
+      File(
+          '${cacheDir.path}/just_read_it_flite_start_${DateTime.now().microsecondsSinceEpoch}.wav'),
+    );
+    final firstDuration = await _wavDuration(firstFile);
+    final totalDuration = _estimateFullDuration(
+      totalChars: text.length,
+      firstChunkChars: chunks.first.length,
+      firstDuration: firstDuration,
+    );
+    final audioHandler = await _ref.read(audioHandlerProvider);
+    await audioHandler.playFileQueue(
+      firstFile,
+      duration: firstDuration,
+      totalDuration: totalDuration,
+      speed: config.rate,
+    );
+    if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+      await audioHandler.stop();
+      _ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+      return;
+    }
+    _ref.read(ttsStatusProvider.notifier).state =
+        'Playing chunk 1 of ${chunks.length}';
+    _attachChunkedTextTimeline(text, chunks, totalDuration, audioHandler);
+    _ref.read(wordChunkDurationsProvider.notifier).state = [firstDuration];
+    debugPrint(
+      'JRI_TTS_FIRST_AUDIO_READY_MS=${startupTimer.elapsedMilliseconds} '
+      'chars=${chunks.first.length} totalChars=${text.length}',
+    );
+    unawaited(_synthesizeAndAppendRustChunks(
+      chunks.skip(1).toList(),
+      cacheDir,
+      stopSignal: stopSignal,
+      audioHandler: audioHandler,
+      voice: voice,
+      totalChunks: chunks.length,
+    ));
+  }
+
   Future<void> _speakWithRustEngine(
     String text,
     VoiceSelection voice,
@@ -464,6 +529,86 @@ class TtsService implements SpeechService {
     }
     _ref.read(ttsStatusProvider.notifier).state = 'Playing';
     _attachTextTimeline(text, duration, audioHandler);
+  }
+
+  Future<_RustPcmAudio> _synthesizeRustPcm(
+    String text,
+    bridge.EngineBackend backend,
+    VoiceSelection voice,
+  ) async {
+    final request = bridge.EngineRequest(backend: backend, gainDb: null);
+    final buffer = BytesBuilder();
+    int? sampleRate;
+    var totalSamples = 0;
+    await for (final chunk
+        in bridge.streamAudio(text: text, request: request)) {
+      final pcmView = chunk.pcm.buffer.asUint8List(
+        chunk.pcm.offsetInBytes,
+        chunk.pcm.lengthInBytes,
+      );
+      buffer.add(pcmView);
+      sampleRate ??= chunk.sampleRate;
+      totalSamples += chunk.pcm.length;
+    }
+    if (totalSamples == 0) {
+      throw StateError('Engine ${voice.id} produced no audio.');
+    }
+    return _RustPcmAudio(buffer.takeBytes(), sampleRate ?? _fallbackSampleRate);
+  }
+
+  Future<File> _writePcmWav(
+      Uint8List pcmBytes, int sampleRate, File output) async {
+    final bytes = BytesBuilder(copy: false)
+      ..add(_wavHeader(
+        dataLength: pcmBytes.length,
+        sampleRate: sampleRate,
+        channels: 1,
+        bitsPerSample: 16,
+      ))
+      ..add(pcmBytes);
+    await output.writeAsBytes(bytes.takeBytes(), flush: true);
+    return output;
+  }
+
+  Future<void> _synthesizeAndAppendRustChunks(
+    List<String> chunks,
+    Directory cacheDir, {
+    required int stopSignal,
+    required TtsAudioHandler audioHandler,
+    required VoiceSelection voice,
+    required int totalChunks,
+  }) async {
+    for (var index = 0; index < chunks.length; index++) {
+      if (_ref.read(ttsStopSignalProvider) != stopSignal) return;
+      final chunkNumber = index + 2;
+      _ref.read(ttsStatusProvider.notifier).state =
+          'Preparing audio chunk $chunkNumber of $totalChunks...';
+      final audio = await _synthesizeRustPcm(
+        chunks[index],
+        const bridge.EngineBackend.flite(),
+        voice,
+      );
+      final file = await _writePcmWav(
+        audio.pcmBytes,
+        audio.sampleRate,
+        File(
+            '${cacheDir.path}/just_read_it_flite_queue_${DateTime.now().microsecondsSinceEpoch}_$index.wav'),
+      );
+      if (_ref.read(ttsStopSignalProvider) != stopSignal) {
+        if (await file.exists()) await file.delete();
+        return;
+      }
+      final duration = await _wavDuration(file);
+      final durations =
+          List<Duration>.from(_ref.read(wordChunkDurationsProvider))
+            ..add(duration);
+      _ref.read(wordChunkDurationsProvider.notifier).state = durations;
+      await audioHandler.appendFileToQueue(file);
+      debugPrint(
+        'JRI_TTS_BUFFERED_CHUNK=$chunkNumber/$totalChunks '
+        'durationMs=${duration.inMilliseconds}',
+      );
+    }
   }
 
   Future<Duration> _wavDuration(File file) async {
@@ -800,6 +945,13 @@ Uint8List _wavHeader({
   header.setUint32(36, 0x64617461, Endian.big);
   header.setUint32(40, dataLength, Endian.little);
   return header.buffer.asUint8List();
+}
+
+class _RustPcmAudio {
+  const _RustPcmAudio(this.pcmBytes, this.sampleRate);
+
+  final Uint8List pcmBytes;
+  final int sampleRate;
 }
 
 class _PcmWav {
