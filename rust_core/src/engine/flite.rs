@@ -28,8 +28,14 @@ extern "C" {
 pub struct FliteEngine;
 
 impl FliteEngine {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
+    }
+}
+
+impl Default for FliteEngine {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
