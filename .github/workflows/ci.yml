@@ -162,7 +162,7 @@ jobs:
           cd ../rust_core
           cargo ndk -t x86_64 \
             -o ../flutter_client/android/app/src/main/jniLibs \
-            build --no-default-features --features bridge
+            build --no-default-features --features bridge,flite
       - name: Run full emulator UI flow
         uses: reactivecircus/android-emulator-runner@v2
         with:

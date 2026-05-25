@@ -32,7 +32,7 @@ void main() {
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
-      'Android Default Voice',
+      'Motorola Male (Flite)',
     );
     await tester.drag(
         find.byKey(const Key('playback.speed')), const Offset(500, 0));
@@ -57,6 +57,19 @@ void main() {
       },
       timeout: const Duration(seconds: 30),
     );
+    await _pumpUntil(
+      tester,
+      () {
+        final status =
+            tester.widget<Text>(find.byKey(const Key('player.status'))).data ??
+                '';
+        return status.contains('Playing');
+      },
+      timeout: const Duration(seconds: 3),
+    );
+    final playbackStartMs = launchTimer.elapsedMilliseconds;
+    debugPrint('JRI_FLCL_PLAYBACK_STARTED_AFTER_MS=$playbackStartMs');
+    expect(playbackStartMs, lessThanOrEqualTo(3000));
     final highlightFinder = find.byKey(const Key('player.highlight.rich_text'));
     expect(highlightFinder, findsOneWidget);
     final highlightedText =

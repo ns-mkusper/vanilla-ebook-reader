@@ -15,7 +15,6 @@ flutter drive \
   --target=integration_test/emulator_flcl_flow_test.dart \
   -d emulator-5554 \
   --dart-define=JRI_EXPORT_TTS_WAV=true \
-  --dart-define=JRI_DEFAULT_VOICE_ID=android-system \
   >> build/screenshots/flutter-run.log 2>&1
 
 if ! grep -q "JRI_FLCL_FULL_TEXT_PLAYBACK_VALIDATED" build/screenshots/flutter-run.log; then
