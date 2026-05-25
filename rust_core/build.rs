@@ -85,6 +85,8 @@ const FLITE_FILES: &[&str] = &[
     "src/speech/cst_wave.c",
     "src/speech/cst_wave_io.c",
     "src/speech/cst_wave_utils.c",
+    "src/speech/g721.c",
+    "src/speech/g72x.c",
     "src/speech/rateconv.c",
     "src/stats/cst_cart.c",
     "src/stats/cst_ss.c",
