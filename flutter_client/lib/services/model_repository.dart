@@ -128,7 +128,7 @@ const voiceModelPresets = <VoiceModelPreset>[
     id: 'flite-classic',
     label: 'Motorola Male (Flite)',
     description:
-        'Uses the installed Flite Android TTS engine and its default Motorola-style male voice. If Flite is unavailable, playback fails explicitly instead of falling back to a female system voice.',
+        'Bundled offline Flite KAL male voice. No separate Android TTS engine install required.',
     backend: TtsEngineBackend.fliteClassic,
     androidEngine: 'edu.cmu.cs.speech.tts.flite',
   ),

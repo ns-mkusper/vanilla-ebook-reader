@@ -284,7 +284,8 @@ return raw as int; }
 @protected EngineBackend dco_decode_engine_backend(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
 switch (raw[0]) {
                 case 0: return EngineBackend_Auto(modelPath: dco_decode_String(raw[1]),);
-case 1: return EngineBackend_Piper(dco_decode_box_autoadd_piper_backend_config(raw[1]),);
+case 1: return const EngineBackend_Flite();
+case 2: return EngineBackend_Piper(dco_decode_box_autoadd_piper_backend_config(raw[1]),);
                 default: throw Exception("unreachable");
             } }
 
@@ -383,7 +384,7 @@ return (sse_decode_u_32(deserializer)); }
 
             var tag_ = sse_decode_i_32(deserializer);
             switch (tag_) { case 0: var var_modelPath = sse_decode_String(deserializer);
-return EngineBackend_Auto(modelPath: var_modelPath);case 1: var var_field0 = sse_decode_box_autoadd_piper_backend_config(deserializer);
+return EngineBackend_Auto(modelPath: var_modelPath);case 1: return const EngineBackend_Flite();case 2: var var_field0 = sse_decode_box_autoadd_piper_backend_config(deserializer);
 return EngineBackend_Piper(var_field0); default: throw UnimplementedError(''); }
              }
 
@@ -501,7 +502,7 @@ sse_encode_u_32(self, serializer); }
 
 @protected void sse_encode_engine_backend(EngineBackend self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
 switch (self) { case EngineBackend_Auto(modelPath: final modelPath): sse_encode_i_32(0, serializer); sse_encode_String(modelPath, serializer);
-case EngineBackend_Piper(field0: final field0): sse_encode_i_32(1, serializer); sse_encode_box_autoadd_piper_backend_config(field0, serializer);
+case EngineBackend_Flite(): sse_encode_i_32(1, serializer); case EngineBackend_Piper(field0: final field0): sse_encode_i_32(2, serializer); sse_encode_box_autoadd_piper_backend_config(field0, serializer);
   } }
 
 @protected void sse_encode_engine_request(EngineRequest self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs

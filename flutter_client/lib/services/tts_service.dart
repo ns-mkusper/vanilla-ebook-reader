@@ -13,6 +13,7 @@ import 'package:just_read_it/api.dart' as bridge;
 import '../services/model_repository.dart';
 import '../services/text_analysis.dart';
 import 'audio_handler.dart';
+import 'bridge_service.dart';
 
 final ttsConfigProvider =
     StateNotifierProvider<TtsConfigNotifier, TtsConfig>((ref) {
@@ -121,10 +122,10 @@ class TtsService implements SpeechService {
 
     switch (voice.backend) {
       case TtsEngineBackend.androidSystem:
-      case TtsEngineBackend.fliteClassic:
         await _speakWithPlatformTts(text, voice, config, stopSignal);
+      case TtsEngineBackend.fliteClassic:
       case TtsEngineBackend.piper:
-        await _speakWithRustPiper(text, voice, config, stopSignal);
+        await _speakWithRustEngine(text, voice, config, stopSignal);
     }
   }
 
@@ -146,27 +147,6 @@ class TtsService implements SpeechService {
 
     final flutterTts = FlutterTts();
     await flutterTts.awaitSynthCompletion(true);
-    if (voice.backend == TtsEngineBackend.fliteClassic) {
-      try {
-        await _configureFliteEngine(flutterTts, voice);
-      } catch (err) {
-        debugPrint('JRI_FLITE_UNAVAILABLE_FALLING_BACK=$err');
-        _ref.read(ttsStatusProvider.notifier).state =
-            'Flite is not installed; using Android Default Voice.';
-        final fallbackPreset =
-            voiceModelPresets.firstWhere((p) => p.id == 'android-system');
-        voice = VoiceSelection(
-          id: fallbackPreset.id,
-          displayName: fallbackPreset.label,
-          backend: fallbackPreset.backend,
-          modelPath: fallbackPreset.id,
-          androidEngine: fallbackPreset.androidEngine,
-          androidVoiceName: fallbackPreset.androidVoiceName,
-          androidVoiceLocale: fallbackPreset.androidVoiceLocale,
-        );
-        _ref.read(ttsConfigProvider.notifier).hydrateVoice(voice);
-      }
-    }
     await flutterTts.setLanguage(voice.androidVoiceLocale);
     await flutterTts.setVolume(1.0);
     await flutterTts.setSpeechRate(0.5);
@@ -404,20 +384,26 @@ class TtsService implements SpeechService {
     return Duration(milliseconds: estimatedMs.round().clamp(1000, 86400000));
   }
 
-  Future<void> _speakWithRustPiper(
+  Future<void> _speakWithRustEngine(
     String text,
     VoiceSelection voice,
     TtsConfig config,
     int stopSignal,
   ) async {
-    final backend = bridge.EngineBackend.piper(
-      bridge.PiperBackendConfig(
-        modelPath: voice.modelPath!,
-        configPath: voice.configPath,
-        speaker: null,
-        sampleRate: null,
-      ),
-    );
+    await initializeTtsBridge();
+    final backend = switch (voice.backend) {
+      TtsEngineBackend.fliteClassic => const bridge.EngineBackend.flite(),
+      TtsEngineBackend.piper => bridge.EngineBackend.piper(
+          bridge.PiperBackendConfig(
+            modelPath: voice.modelPath!,
+            configPath: voice.configPath,
+            speaker: null,
+            sampleRate: null,
+          ),
+        ),
+      TtsEngineBackend.androidSystem =>
+        throw StateError('Android system TTS should not use Rust engine'),
+    };
 
     final request = bridge.EngineRequest(backend: backend, gainDb: null);
     final stream = bridge.streamAudio(text: text, request: request).timeout(
@@ -605,31 +591,6 @@ class TtsService implements SpeechService {
         chunkWordCounts[currentIndex] /
         totalWords;
     return Duration(milliseconds: estimatedMs.round().clamp(1000, 600000));
-  }
-}
-
-Future<void> _configureFliteEngine(
-  FlutterTts flutterTts,
-  VoiceSelection voice,
-) async {
-  if (voice.androidEngine == null || !Platform.isAndroid) {
-    throw StateError(
-        'Motorola Male (Flite) requires an Android Flite TTS engine.');
-  }
-  try {
-    final engines = await flutterTts.getEngines;
-    if (engines is Iterable && !engines.contains(voice.androidEngine)) {
-      throw StateError('installed engines: ${engines.join(', ')}');
-    }
-    final result = await flutterTts.setEngine(voice.androidEngine!);
-    if (result != 1) {
-      throw StateError('setEngine returned $result');
-    }
-    debugPrint('JRI_FLITE_ENGINE_SELECTED=${voice.androidEngine}');
-  } catch (err) {
-    throw StateError(
-      'Motorola Male (Flite) is unavailable. Install/select the Flite Android TTS engine or choose Android Default Voice. ($err)',
-    );
   }
 }
 

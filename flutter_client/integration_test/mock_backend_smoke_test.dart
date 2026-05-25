@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_read_it/api.dart' as bridge;
-import 'package:just_read_it/main.dart' as app;
+import 'package:just_read_it/services/bridge_service.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +15,7 @@ void main() {
   testWidgets('mock backend emits audible audio and plays back',
       (tester) async {
     await tester.runAsync(() async {
-      await app.initializeTtsBridge();
+      await initializeTtsBridge();
 
       const request = bridge.EngineRequest(
         backend: bridge.EngineBackend.auto(modelPath: 'mock-orbit'),
