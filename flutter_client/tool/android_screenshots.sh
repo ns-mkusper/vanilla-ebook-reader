@@ -68,7 +68,8 @@ fi
 python3 ../tools/validate_wav_stt.py \
   build/screenshots/voice_sample_from_emulator.wav \
   --model "$MODEL_DIR" \
-  --expected "Simple book speech fixture This simple book is a clear test of imported speech Just Read It should restore the document and read every sentence aloud"
+  --expected "Simple book speech fixture This simple book is a clear test of imported speech Just Read It should restore the document and read every sentence aloud" \
+  --min-coverage 0.60
 rm -rf "$MODEL_DIR" build/screenshots/vosk-model.zip
 
 test -s build/screenshots/01_txt_import_editor.png
