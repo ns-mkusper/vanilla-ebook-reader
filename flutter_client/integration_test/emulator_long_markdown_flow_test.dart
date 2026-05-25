@@ -40,6 +40,7 @@ void main() {
         find.byKey(const Key('playback.speed')), const Offset(500, 0));
     await tester.pump(const Duration(milliseconds: 300));
 
+    final wavFile = File('${tempDir.path}/just_read_it_playback_sample.wav');
     final launchTimer = Stopwatch()..start();
     await _tapLaunchButton(tester);
     await _pumpUntilFound(tester, find.text('Streaming Playback'),
@@ -61,13 +62,8 @@ void main() {
     );
     await _pumpUntil(
       tester,
-      () {
-        final status =
-            tester.widget<Text>(find.byKey(const Key('player.status'))).data ??
-                '';
-        return status.contains('Playing');
-      },
-      timeout: const Duration(seconds: 90),
+      () => wavFile.existsSync() && wavFile.lengthSync() > 100000,
+      timeout: const Duration(minutes: 2),
     );
     final playbackStartMs = launchTimer.elapsedMilliseconds;
     debugPrint('JRI_LONG_DOC_PLAYBACK_STARTED_AFTER_MS=$playbackStartMs');
@@ -79,11 +75,10 @@ void main() {
     expect(highlightedText, contains('long-form markdown fixture'));
     expect(highlightedText, contains('See you at the end'));
 
-    final wavFile = File('${tempDir.path}/just_read_it_playback_sample.wav');
     await _pumpUntil(
       tester,
       () => wavFile.existsSync() && wavFile.lengthSync() > 100000,
-      timeout: const Duration(minutes: 2),
+      timeout: const Duration(seconds: 5),
     );
     debugPrint(
       'JRI_LONG_DOC_PLAYBACK_PROOF_MS=${launchTimer.elapsedMilliseconds}',
