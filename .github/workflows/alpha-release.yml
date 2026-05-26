@@ -1,0 +1,163 @@
+name: Alpha Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alpha-release-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  SLINT_NO_QT: "1"
+
+jobs:
+  android-alpha-release:
+    name: Build and publish Android alpha
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve alpha version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_VERSION=$(python3 - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('flutter_client/pubspec.yaml').read_text()
+          match = re.search(r'^version:\s*([^+\s]+)', text, re.MULTILINE)
+          if not match:
+              raise SystemExit('flutter_client/pubspec.yaml has no version field')
+          print(match.group(1))
+          PY
+          )
+          git fetch --tags --force
+          EXISTING_TAG=$(git tag --points-at HEAD --list "v*-alpha.*" | sort -V | tail -n 1 || true)
+          if [ -n "$EXISTING_TAG" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$EXISTING_TAG" >> "$GITHUB_OUTPUT"
+            echo "version=${EXISTING_TAG#v}" >> "$GITHUB_OUTPUT"
+            echo "Existing alpha tag $EXISTING_TAG already points at this commit; skipping duplicate release."
+            exit 0
+          fi
+          LATEST_TAG=$(git tag --list "v${BASE_VERSION}-alpha.*" | sort -V | tail -n 1 || true)
+          if [ -z "$LATEST_TAG" ]; then
+            NEXT_ALPHA=1
+          else
+            CURRENT_ALPHA=${LATEST_TAG##*.}
+            NEXT_ALPHA=$((CURRENT_ALPHA + 1))
+          fi
+          TAG="v${BASE_VERSION}-alpha.${NEXT_ALPHA}"
+          VERSION="${BASE_VERSION}-alpha.${NEXT_ALPHA}"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$NEXT_ALPHA" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Flutter
+        if: steps.version.outputs.skip != 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Set up Java
+        if: steps.version.outputs.skip != 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Rust Android target
+        if: steps.version.outputs.skip != 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        if: steps.version.outputs.skip != 'true'
+        run: cargo install cargo-ndk --locked
+
+      - name: Flutter pub get
+        if: steps.version.outputs.skip != 'true'
+        working-directory: flutter_client
+        run: flutter pub get
+
+      - name: Build Android Rust bridge library
+        if: steps.version.outputs.skip != 'true'
+        working-directory: rust_core
+        run: |
+          cargo ndk -t arm64-v8a \
+            -o ../flutter_client/android/app/src/main/jniLibs \
+            build --release --no-default-features --features bridge,flite
+
+      - name: Build Android alpha APK
+        if: steps.version.outputs.skip != 'true'
+        working-directory: flutter_client
+        run: |
+          flutter build apk \
+            --release \
+            --target-platform android-arm64 \
+            --build-name "${{ steps.version.outputs.version }}" \
+            --build-number "${{ steps.version.outputs.build_number }}"
+
+      - name: Package release artifacts
+        if: steps.version.outputs.skip != 'true'
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          APK="just-read-it-${TAG}-android-arm64.apk"
+          SHA_FILE="${APK}.sha256"
+          cp flutter_client/build/app/outputs/flutter-apk/app-release.apk "$APK"
+          sha256sum "$APK" > "$SHA_FILE"
+          {
+            echo "apk=$APK"
+            echo "sha_file=$SHA_FILE"
+            echo "sha256=$(cut -d' ' -f1 "$SHA_FILE")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        if: steps.version.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > RELEASE_NOTES.md <<'EOF'
+          ## Just Read It ${{ steps.version.outputs.tag }}
+
+          Automated alpha release from `main`.
+
+          - Commit: `${{ github.event.workflow_run.head_sha || github.sha }}`
+          - CI run: ${{ github.event.workflow_run.html_url || github.server_url }}
+          - Android artifact: `${{ steps.package.outputs.apk }}`
+          - SHA256: `${{ steps.package.outputs.sha256 }}`
+
+          This is an alpha-channel APK intended for testing and validation. It is not yet a signed production release.
+          EOF
+
+      - name: Publish GitHub Release
+        if: steps.version.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.event.workflow_run.head_sha || github.sha }}
+          name: Just Read It ${{ steps.version.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          prerelease: true
+          files: |
+            ${{ steps.package.outputs.apk }}
+            ${{ steps.package.outputs.sha_file }}

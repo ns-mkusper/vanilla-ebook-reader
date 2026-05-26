@@ -23,6 +23,7 @@ Further technical notes:
 
 - [Runtime pipeline](docs/runtime-pipeline.md)
 - [Validation guide](docs/validation.md)
+- [Release workflow](docs/releases.md)
 - [Roadmap](docs/roadmap.md)
 
 ## Build prerequisites
