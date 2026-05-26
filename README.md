@@ -1,99 +1,188 @@
 # Just Read It
 
-Just Read It is a no-nonsense Android text-to-speech app for turning ebooks and text files into readable, listenable playback. It pairs a Flutter UI with a Rust synthesis core so the app can read aloud while visually tracking text word by word.
+**Just Read It** is a Flutter + Rust read-aloud app for importing long-form text, editing it locally, and playing it back with synchronized word highlighting and native media controls.
 
-Highlights:
+The project is currently focused on Android. It ships a production-style mobile UI, persistent document storage, native file import, real synthesized audio playback, background/media controls, adjustable speech settings, and emulator-backed playback validation.
 
-- **Ebook and text-first workflow** – bring in long-form reading material, paste text, or dictate text and stream it immediately through the integrated player.
-- **Graphical read-aloud experience** – follow along as each word is highlighted in sync with generated speech.
-- **Background playback** – `audio_service`/`just_audio` keep narration active with Android foreground notifications and iOS `UIBackgroundModes = audio`.
-- **Practical real-speech voices** – use the Android system TTS engine by default, with a Classic Flite option when a Flite Android TTS engine is installed and Piper-ready scaffolding for future bundled/downloaded neural voices.
-- **Persistent imports** – import TXT/EPUB content, keep the editable text between app restarts, and resume read-aloud quickly.
+<p align="center">
+  <img src="docs/assets/android-editor-import.png" alt="Just Read It editor showing imported text and reading controls" width="320" />
+  <img src="docs/assets/android-player-playback.png" alt="Just Read It player showing synchronized highlighting and playback controls" width="320" />
+</p>
 
-The repository is organized as a split Flutter/Rust workspace so engines, bindings, and UI can evolve independently.
+## What it does
 
-## Layout
+- **Import real documents**: TXT, Markdown, and EPUB import through the Android file browser / Storage Access Framework. Provider-backed files such as Google Drive documents are read from picker bytes instead of requiring filesystem paths.
+- **Keep text editable**: imported or pasted content remains editable and persists across app restarts.
+- **Read aloud with real playback**: generated speech is played through the app's native media pipeline rather than a fake timer or UI-only mock.
+- **Highlight while listening**: word boundaries and playback progress drive synchronized highlighting in the reader view.
+- **Control playback everywhere**: `audio_service` + `just_audio` provide foreground/background playback, pause/resume/stop, speed control, and Android media notification integration.
+- **Tune the voice**: choose between embedded Flite and Android system TTS paths, then adjust rate and pitch.
+- **Follow the system theme**: the app uses the platform light/dark preference by default.
 
-- `rust_core/`: Streaming synthesis backend with swappable engines (Piper-ready scaffolding today) exposed over Flutter Rust Bridge.
-- `flutter_client/`: Flutter UI + background audio service integrating document import, Riverpod state, and the bridge bindings.
-- `tools/`: Project automation (`build_all.sh`) plus local tool stubs to unblock codegen in containerized environments.
+## Architecture
 
-## Prerequisites
+```text
+just-read-it/
+├── flutter_client/         # Flutter app, Riverpod state, document import, UI, audio service
+├── rust_core/              # Rust synthesis/audio core exposed through Flutter Rust Bridge
+├── tools/                  # Validation and project automation scripts
+└── docs/assets/            # README screenshots and visual assets
+```
 
-- Rust toolchain with `cargo ndk` for Android targets
-- Flutter 3.19+ with the Android SDK/NDK configured
-- `flutter_rust_bridge_codegen` on the host `PATH`:
+### Runtime pipeline
 
-  ```bash
-  cargo install flutter_rust_bridge_codegen --locked
-  ```
+```text
+Document picker / pasted text
+        ↓
+DocumentRepository
+        ↓
+Editable Flutter text surface
+        ↓
+TTS service: Android system TTS or embedded Rust/Flite path
+        ↓
+WAV/PCM audio source
+        ↓
+just_audio + audio_service
+        ↓
+Native playback, notification controls, word highlighting, exported test artifacts
+```
 
+## Current platform status
+
+| Platform | Status | Notes |
+| --- | --- | --- |
+| Android | Active target | File browser import, background playback, media controls, emulator screenshots/audio validation. |
+| iOS | Planned | Tracked in [issue #2](https://github.com/ns-mkusper/just-read-it/issues/2). Needs iOS bridge packaging, Files import validation, and background audio verification. |
+| Desktop | Development-friendly | Useful for Flutter/Rust iteration, but mobile UX is the primary product target. |
+
+## Key technical components
+
+### Flutter client
+
+- `flutter_client/lib/ui/editor_screen.dart` — editor, import entry point, persistent draft UI.
+- `flutter_client/lib/ui/player_screen.dart` — playback screen, progress, highlighting, pause/stop controls.
+- `flutter_client/lib/services/document_picker.dart` — native picker wrapper using `file_picker`.
+- `flutter_client/lib/services/document_repository.dart` — TXT/Markdown/EPUB import, EPUB XHTML extraction, draft persistence.
+- `flutter_client/lib/services/tts_service.dart` — speech synthesis orchestration, chunking, timeline attachment.
+- `flutter_client/lib/services/audio_handler.dart` — native media playback, queueing, notification/media-session integration.
+
+### Rust core
+
+- `rust_core/` contains the Rust audio/synthesis bridge used by Flutter Rust Bridge.
+- Embedded Flite support is built from upstream source at build time instead of vendoring the full Flite tree into this repository.
+- Android builds produce `librust_core.so` under `flutter_client/android/app/src/main/jniLibs/<abi>/`.
+
+## Build prerequisites
+
+- Flutter stable with Android SDK/NDK configured.
+- Rust stable.
+- `cargo-ndk` for Android Rust library builds.
+- `flutter_rust_bridge_codegen` matching the pinned Flutter/Rust bridge runtime.
+
+```bash
+cargo install cargo-ndk --locked
+cargo install flutter_rust_bridge_codegen --version 2.11.1 --locked
+```
 
 ## Bootstrap
 
-1. Install Flutter/Dart packages:
+```bash
+cd flutter_client
+flutter pub get
+```
 
-   ```bash
-   cd flutter_client
-   flutter pub get
-   ```
-
-2. Regenerate the Flutter↔Rust bindings (the script now reads `flutter_rust_bridge.yaml`, so paths are normalized on Windows and the previous UNC prefix issue disappears):
-
-   ```bash
-   ./tools/build_all.sh codegen
-   ```
-
-3. Build the Rust core for the host platform:
-
-   ```bash
-   ./tools/build_all.sh rust
-   ```
-
-   > The script passes `--features bridge,piper` so the Piper engine and FFI stubs are always available. For Android shared libraries run `./tools/build_all.sh android` – `cargo ndk` will place the `.so` files under `flutter_client/android/app/src/main/jniLibs`.
-
-4. Build and launch Flutter:
-
-   ```bash
-   cd flutter_client
-   flutter run
-   ```
-
-   To generate a debuggable APK that can be side-loaded on an emulator or device:
-
-   ```bash
-   flutter build apk --debug
-   ```
-
-## Voice Models
-
-- **Android System Voice**: The default production path synthesizes real speech to an audio file using the platform TTS engine, then plays that generated audio through the app media player.
-- **Classic Flite**: Selectable as an opt-in retro voice. On Android it attempts to use a Flite TTS engine package when installed, and otherwise falls back to the normal system TTS engine so playback remains reliable.
-- **Piper-ready neural path**: Rust still contains Piper scaffolding for future bundled or downloadable neural voices without pretending large Qwen-class models are practical to ship inside the APK.
-- **Background playback**: Android ships the `com.ryanheise.audioservice.AudioService` foreground service plus the required `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permission, while iOS has `UIBackgroundModes = audio`. `AudioServiceConfig` advertises the persistent notification and `just_audio` provides play/pause/seek plus speed control.
-
-## Tooling
-
-`tools/build_all.sh` now orchestrates:
-
-- `flutter_rust_bridge_codegen --config flutter_rust_bridge.yaml`
-- `cargo build --features bridge,piper`
-- `cargo ndk` / `cargo lipo` for mobile targets
-- `flutter build apk` when requested
-
-Because the generator reads the YAML config, Windows paths are normalized and the previous `compute_mod_from_rust_path` “prefix not found” panic is resolved.
-
-## Performance Guardrails
-
-Keep both the Rust core and the Flutter text pipeline from regressing by running the dedicated performance suites:
+Regenerate Flutter ↔ Rust bindings when bridge APIs change:
 
 ```bash
-# Bench the Rust synthesis primitives (requires a longer first build)
-cargo bench --bench engine_bench
+flutter_rust_bridge_codegen generate
+```
 
-# Enforce Dart-side timing thresholds for boundary + cue generation
+Or use the project helper when appropriate:
+
+```bash
+./tools/build_all.sh codegen
+```
+
+## Android build
+
+Build the Rust shared library for Android ARM64:
+
+```bash
+cd rust_core
+cargo ndk -t arm64-v8a \
+  -o ../flutter_client/android/app/src/main/jniLibs \
+  build --no-default-features --features bridge,flite
+```
+
+Build a debuggable APK:
+
+```bash
+cd ../flutter_client
+flutter build apk --debug --target-platform android-arm64
+```
+
+The APK will be written to:
+
+```text
+flutter_client/build/app/outputs/flutter-apk/app-debug.apk
+```
+
+## Validation
+
+Run the primary Flutter checks:
+
+```bash
 cd flutter_client
+flutter analyze
+flutter test
+```
+
+Run focused document/UI/TTS suites:
+
+```bash
+flutter test test/document_repository_test.dart
+flutter test test/ux_flow_test.dart
+flutter test test/tts_chunking_test.dart
 flutter test test/performance/text_pipeline_perf_test.dart
 ```
 
-`cargo bench` emits Criterion HTML reports under `target/criterion/`. Inspect the generated plot if a run flags a regression. The Flutter suite fails whenever a 4k-word sample exceeds its microsecond budget, which keeps boundary detection, cue building, and highlighting lookups near-linear.
+Run Rust checks:
+
+```bash
+cd rust_core
+cargo fmt --check
+cargo clippy -- -D warnings
+cargo test --no-default-features --features flite
+cargo check --target aarch64-linux-android --no-default-features
+```
+
+Run the Android emulator screenshot/audio proof flow from `flutter_client/` when an emulator is available:
+
+```bash
+bash tool/android_screenshots.sh
+```
+
+That flow captures UI screenshots, exports playback WAV files, validates WAV structure, and checks speech output coverage.
+
+## Import support
+
+Supported extensions:
+
+- `.txt`
+- `.text`
+- `.md`
+- `.markdown`
+- `.epub`
+
+EPUB import extracts readable XHTML/HTML content from the archive and strips markup into plain text for editing and playback.
+
+## Roadmap
+
+- iOS compatibility and Files/iCloud import validation — [issue #2](https://github.com/ns-mkusper/just-read-it/issues/2).
+- Stronger packaged release workflow beyond debug APK artifacts.
+- More robust voice management and packaged voice metadata.
+- Larger-library document management beyond the current active-draft workflow.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
