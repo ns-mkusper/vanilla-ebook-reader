@@ -2,6 +2,19 @@
 set -euxo pipefail
 
 mkdir -p build/screenshots
+adb -s emulator-5554 wait-for-device
+for service in package storagestats; do
+  for attempt in {1..60}; do
+    if adb -s emulator-5554 shell service check "$service" | grep -q found; then
+      break
+    fi
+    sleep 2
+  done
+  adb -s emulator-5554 shell service check "$service" | grep -q found
+done
+adb -s emulator-5554 shell pm list packages >/dev/null
+sleep 10
+
 flutter drive \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/emulator_flow_test.dart \
