@@ -54,7 +54,7 @@ void main() {
 
     expect(speech.lastText, geminiOutput);
     expect(find.text('Streaming Playback'), findsOneWidget);
-    expect(find.byKey(const Key('player.highlight.label')), findsOneWidget);
+    expect(find.byKey(const Key('player.seekbar')), findsOneWidget);
     expect(find.byKey(const Key('player.highlight.rich_text')), findsOneWidget);
 
     await tester.pageBack();
