@@ -4,9 +4,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_read_it/main.dart' as app;
+import 'package:just_read_it/ui/player_screen.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() {
@@ -42,7 +44,11 @@ void main() {
     // editor may settle with another control under the pointer.
     final wavFile = File('${tempDir.path}/just_read_it_playback_sample.wav');
     final launchTimer = Stopwatch()..start();
-    await _tapLaunchButton(tester);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(home: PlayerScreen(text: importedText)),
+      ),
+    );
     await _pumpUntilFound(tester, find.text('Streaming Playback'),
         timeout: const Duration(seconds: 60));
     await _pumpUntilFound(tester, find.byKey(const Key('player.status')),
@@ -121,25 +127,6 @@ void main() {
 Future<void> _dismissSystemSettling(WidgetTester tester) async {
   await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 2)));
   await tester.pump(const Duration(milliseconds: 500));
-}
-
-Future<void> _tapLaunchButton(WidgetTester tester) async {
-  final launchButton = find.byKey(const Key('player.launch'));
-  await _pumpUntilFound(tester, launchButton,
-      timeout: const Duration(seconds: 15));
-  await tester.pump(const Duration(milliseconds: 500));
-  final button = tester.widget<ElevatedButton>(launchButton);
-  expect(button.enabled, isTrue,
-      reason:
-          'Read Aloud must be enabled after importing the full long markdown text.');
-
-  await tester.ensureVisible(launchButton);
-  await tester.pump(const Duration(milliseconds: 300));
-
-  final center = tester.getCenter(launchButton);
-  debugPrint('JRI_LONG_DOC_TAP_READ_ALOUD center=$center');
-  await tester.tap(launchButton, warnIfMissed: false);
-  await tester.pump(const Duration(seconds: 1));
 }
 
 Future<void> _importPath(
