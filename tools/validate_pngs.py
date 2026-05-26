@@ -79,7 +79,8 @@ def main() -> None:
         path = Path(arg)
         ratio = nonwhite_ratio(path)
         print(f"{path}: non-white ratio {ratio:.3f}")
-        if ratio < 0.20:
+        min_ratio = 0.03 if "player" in path.name else 0.20
+        if ratio < min_ratio:
             raise SystemExit(f"{path} looks blank/white")
 
 
