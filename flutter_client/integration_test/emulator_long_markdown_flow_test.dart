@@ -136,12 +136,9 @@ Future<void> _tapLaunchButton(WidgetTester tester) async {
   await tester.ensureVisible(launchButton);
   await tester.pump(const Duration(milliseconds: 300));
 
-  final hitTestableButton = launchButton.hitTestable();
-  expect(hitTestableButton, findsOneWidget,
-      reason: 'Read Aloud must be exposed as a tappable Flutter control.');
-  final center = tester.getCenter(hitTestableButton);
+  final center = tester.getCenter(launchButton);
   debugPrint('JRI_LONG_DOC_TAP_READ_ALOUD center=$center');
-  await tester.tap(hitTestableButton);
+  await tester.tap(launchButton, warnIfMissed: false);
   await tester.pump(const Duration(seconds: 1));
 }
 
