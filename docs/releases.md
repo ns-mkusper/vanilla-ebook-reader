@@ -31,9 +31,11 @@ Each alpha release publishes:
 
 - an Android ARM64 APK;
 - a SHA256 checksum file;
-- release notes containing the release commit SHA and source CI run.
+- release notes containing the release commit SHA, source CI run, artifact metadata, and a changelog.
 
-The workflow tags the exact merge commit used for the build so the APK, source, and CI validation are traceable.
+The changelog is generated from the first-parent Git history. If a previous alpha tag exists, release notes list commits since that tag and include a compare link. For the first alpha release, notes include a bounded recent-commit summary.
+
+The workflow tags the exact merge commit used for the build so the APK, source, changelog, and CI validation are traceable.
 
 ## Idempotency
 
