@@ -139,17 +139,3 @@ class PitchSlider extends ConsumerWidget {
     );
   }
 }
-
-class ThemeToggle extends ConsumerWidget {
-  const ThemeToggle({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SwitchListTile(
-      value: isDark,
-      title: const Text('Dark Mode'),
-      onChanged: (_) {},
-    );
-  }
-}
