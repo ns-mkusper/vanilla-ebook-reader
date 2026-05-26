@@ -10,8 +10,11 @@ env:
   SLINT_NO_QT: "1"
 
 jobs:
-  lint-and-test:
+  rust-lint-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust_core
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -21,42 +24,165 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Cargo clippy
         run: cargo clippy --workspace --all-targets -- --deny warnings
+      - name: Cargo test
+        run: cargo test --workspace --all-targets
       - name: Cargo check
         run: cargo check --workspace --all-targets
 
-  android-check:
+  flutter-ux-tests:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Flutter pub get
+        run: flutter pub get
+      - name: Flutter analyze
+        run: flutter analyze
+      - name: Widget smoke test
+        run: flutter test test/widget_test.dart
+      - name: Document import and persistence tests
+        run: flutter test test/document_repository_test.dart
+      - name: Desktop/mobile UX flow tests
+        run: flutter test test/ux_flow_test.dart
+      - name: Long document TTS chunking tests
+        run: flutter test test/tts_chunking_test.dart
+      - name: Text pipeline performance guardrail
+        run: flutter test test/performance/text_pipeline_perf_test.dart
+
+  android-rust-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust_core
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
-      - name: Cargo check (android)
+      - name: Cargo check Android Rust core
         run: cargo check --target aarch64-linux-android --no-default-features
 
-  android-apk:
+
+  android-emulator-screenshots:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_client
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: subosito/flutter-action@v2
         with:
-          targets: aarch64-linux-android, x86_64-linux-android
+          channel: stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Generate Android project
+        run: flutter create --platforms=android --project-name just_read_it .
+      - name: Flutter pub get
+        run: flutter pub get
+      - name: Patch Android audio service activity
+        run: |
+          MAIN_ACTIVITY=$(find android/app/src/main -name MainActivity.kt -o -name MainActivity.java | head -1)
+          if [ -z "$MAIN_ACTIVITY" ]; then
+            echo "MainActivity not found" >&2
+            exit 1
+          fi
+          if [[ "$MAIN_ACTIVITY" == *.kt ]]; then
+            cat > "$MAIN_ACTIVITY" <<'KOTLIN'
+          package com.example.just_read_it
+
+          class MainActivity : com.ryanheise.audioservice.AudioServiceActivity()
+          KOTLIN
+          else
+            cat > "$MAIN_ACTIVITY" <<'JAVA'
+          package com.example.just_read_it;
+
+          public class MainActivity extends com.ryanheise.audioservice.AudioServiceActivity {}
+          JAVA
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          if 'xmlns:tools=' not in text:
+              text = text.replace(
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools">',
+              )
+          permissions = [
+              '<uses-permission android:name="android.permission.WAKE_LOCK" />',
+              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />',
+          ]
+          for permission in permissions:
+              if permission not in text:
+                  text = text.replace('<application', f'{permission}\n    <application', 1)
+          if 'android:usesCleartextTraffic=' not in text:
+              text = text.replace(
+                  '<application',
+                  '<application android:usesCleartextTraffic="true"',
+                  1,
+              )
+          service_block = '''
+                  <service
+                      android:name="com.ryanheise.audioservice.AudioService"
+                      android:exported="true"
+                      android:foregroundServiceType="mediaPlayback"
+                      tools:ignore="Instantiatable">
+                      <intent-filter>
+                          <action android:name="android.media.browse.MediaBrowserService" />
+                      </intent-filter>
+                  </service>
+                  <receiver
+                      android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+                      android:exported="true"
+                      tools:ignore="Instantiatable">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MEDIA_BUTTON" />
+                      </intent-filter>
+                  </receiver>
+          '''
+          if 'com.ryanheise.audioservice.AudioService' not in text:
+              text = text.replace('    </application>', service_block + '    </application>')
+          manifest.write_text(text)
+          PY
+      - name: Install Rust Android target
+        run: rustup target add x86_64-linux-android
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
-      - name: Set up Android NDK
-        id: ndk
-        uses: android-actions/setup-ndk@v3
-        with:
-          ndk-version: 26.1.10909125
-      - name: Build JNI libraries
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+      - name: Build Android Rust bridge library
         run: |
-          cargo ndk -t x86_64 -t arm64-v8a \
-            -o android/app/src/main/jniLibs \
-            build --no-default-features --features native-audio
-      - name: Assemble debug APK
-        working-directory: android
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: ./gradlew assembleDebug
+          cd ../rust_core
+          cargo ndk -t x86_64 \
+            -o ../flutter_client/android/app/src/main/jniLibs \
+            build --no-default-features --features bridge,flite
+      - name: Run full emulator UI flow
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-boot-timeout: 1200
+          working-directory: flutter_client
+          script: |
+            bash tool/android_screenshots.sh
+            bash tool/check_no_system_dialogs.sh
+      - name: Upload emulator artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-screenshots
+          path: |
+            flutter_client/build/screenshots/*.png
+            flutter_client/build/screenshots/*.log
+            flutter_client/build/screenshots/*.xml
+            flutter_client/build/screenshots/*.wav
+          if-no-files-found: error

@@ -71,8 +71,7 @@ target/
 # Rust
 **/*.rs.bk
 
-# Ignore benches unless you actually write benchmark code
-rust_core/benches/
+# Benchmarks are committed when declared in Cargo.toml.
 
 # IDEs & Editors
 .idea/

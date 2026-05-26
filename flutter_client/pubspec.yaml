@@ -1,5 +1,5 @@
-name: tts_flutter_client
-description: GenUI-driven background TTS controller powered by a Rust core
+name: just_read_it
+description: No-nonsense read-aloud app for ebooks and text files powered by Flutter and Rust
 publish_to: 'none'
 version: 0.1.0
 
@@ -10,20 +10,19 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_rust_bridge: ^2.0.0
+  flutter_rust_bridge: 2.11.1
   flutter_riverpod: ^2.4.0
   riverpod_annotation: ^2.3.0
   audio_service: ^0.18.12
   just_audio: ^0.9.36
-  genui: ^0.5.1
-  genui_google_generative_ai: ^0.5.1
   freezed_annotation: ^2.4.1
   json_annotation: ^4.9.0
   collection: ^1.18.0
   path_provider: ^2.1.5
   path: ^1.9.0
   logging: ^1.3.0
-  json_schema_builder: ^0.1.3
+  flutter_tts: ^4.2.3
+  file_picker: ^10.3.7
 
 dev_dependencies:
   flutter_test:
@@ -39,5 +38,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/models/en_us_amy_low.onnx
     - assets/models/en_us_amy_low.onnx.json
+    - test/fixtures/long_markdown_fixture.md

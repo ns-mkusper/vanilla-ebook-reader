@@ -6,8 +6,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:tts_flutter_client/api.dart' as bridge;
-import 'package:tts_flutter_client/main.dart' as app;
+import 'package:just_read_it/api.dart' as bridge;
+import 'package:just_read_it/services/bridge_service.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -15,9 +15,9 @@ void main() {
   testWidgets('mock backend emits audible audio and plays back',
       (tester) async {
     await tester.runAsync(() async {
-      await app.initializeTtsBridge();
+      await initializeTtsBridge();
 
-      final request = bridge.EngineRequest(
+      const request = bridge.EngineRequest(
         backend: bridge.EngineBackend.auto(modelPath: 'mock-orbit'),
         gainDb: null,
       );
@@ -60,7 +60,11 @@ void main() {
       } finally {
         await stateSub.cancel();
         await player.dispose();
-        await wavFile.delete().catchError((_) {});
+        try {
+          await wavFile.delete();
+        } catch (_) {
+          // Best effort cleanup.
+        }
       }
     });
   });

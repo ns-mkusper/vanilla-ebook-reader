@@ -310,6 +310,9 @@ impl SseDecode for crate::api::EngineBackend {
                 };
             }
             1 => {
+                return crate::api::EngineBackend::Flite;
+            }
+            2 => {
                 let mut var_field0 = <crate::api::PiperBackendConfig>::sse_decode(deserializer);
                 return crate::api::EngineBackend::Piper(var_field0);
             }
@@ -538,8 +541,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::EngineBackend {
             crate::api::EngineBackend::Auto { model_path } => {
                 [0.into_dart(), model_path.into_into_dart().into_dart()].into_dart()
             }
+            crate::api::EngineBackend::Flite => [1.into_dart()].into_dart(),
             crate::api::EngineBackend::Piper(field0) => {
-                [1.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+                [2.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
             _ => {
                 unimplemented!("");
@@ -679,8 +683,11 @@ impl SseEncode for crate::api::EngineBackend {
                 <i32>::sse_encode(0, serializer);
                 <String>::sse_encode(model_path, serializer);
             }
-            crate::api::EngineBackend::Piper(field0) => {
+            crate::api::EngineBackend::Flite => {
                 <i32>::sse_encode(1, serializer);
+            }
+            crate::api::EngineBackend::Piper(field0) => {
+                <i32>::sse_encode(2, serializer);
                 <crate::api::PiperBackendConfig>::sse_encode(field0, serializer);
             }
             _ => {
@@ -836,14 +843,14 @@ mod io {
     flutter_rust_bridge::frb_generated_boilerplate_io!();
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_tts_flutter_client_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEngineRegistryHandle(
+    pub extern "C" fn frbgen_just_read_it_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEngineRegistryHandle(
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<EngineRegistryHandle>>::increment_strong_count(ptr as _);
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_tts_flutter_client_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEngineRegistryHandle(
+    pub extern "C" fn frbgen_just_read_it_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEngineRegistryHandle(
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<EngineRegistryHandle>>::decrement_strong_count(ptr as _);

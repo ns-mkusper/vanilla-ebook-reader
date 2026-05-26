@@ -3,15 +3,17 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
 
 final audioHandlerProvider = Provider<Future<TtsAudioHandler>>((ref) async {
   return AudioService.init(
     builder: () => TtsAudioHandler(),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'tts.beast.channel',
-      androidNotificationChannelName: 'TTS Beast',
+      androidNotificationChannelId: 'just.read.it.channel',
+      androidNotificationChannelName: 'Just Read It',
       androidNotificationOngoing: true,
     ),
   );
@@ -19,65 +21,201 @@ final audioHandlerProvider = Provider<Future<TtsAudioHandler>>((ref) async {
 
 class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   TtsAudioHandler() {
-    _eventSub = _player.playbackEventStream.listen(_broadcastState);
+    _player.playbackEventStream.listen(_broadcastState);
   }
 
   final AudioPlayer _player = AudioPlayer();
-  StreamSubscription<PlaybackEvent>? _eventSub;
   MediaItem? _currentItem;
-  File? _lastTempFile;
+  ConcatenatingAudioSource? _activePlaylist;
 
   Future<Duration> playPcm(
     Uint8List pcmBytes,
     int sampleRate, {
-    required String cacheDirPath,
+    double speed = 1.0,
   }) async {
     if (pcmBytes.isEmpty || sampleRate <= 0) {
       return Duration.zero;
     }
 
     final wavBytes = _buildWavBytes(pcmBytes, sampleRate);
-    final tempDir = Directory(cacheDirPath);
-    if (!tempDir.existsSync()) {
-      tempDir.createSync(recursive: true);
-    }
-    await _cleanupTempFile();
-    final tempFile = File(
-      '${tempDir.path}/tts_${DateTime.now().microsecondsSinceEpoch}.wav',
-    );
-    await tempFile.writeAsBytes(wavBytes, flush: true);
-    _lastTempFile = tempFile;
-    final uri = Uri.file(tempFile.path);
+    final source = _MemoryAudioSource(wavBytes);
     final duration = Duration(
       milliseconds: (pcmBytes.length / 2 / sampleRate * 1000).round(),
     );
+    await _playSource(
+      source,
+      id: 'memory://just-read-it/tts-${DateTime.now().microsecondsSinceEpoch}.wav',
+      duration: duration,
+      speed: speed,
+      playbackExportBytes: wavBytes,
+    );
+    return duration;
+  }
+
+  Future<Duration> playFile(
+    File file, {
+    required Duration duration,
+    double speed = 1.0,
+  }) async {
+    await _playSource(
+      AudioSource.uri(file.uri),
+      id: file.uri.toString(),
+      duration: duration,
+      speed: speed,
+      playbackExportFile: file,
+    );
+    return duration;
+  }
+
+  Future<Duration> playFileQueue(
+    File file, {
+    required Duration duration,
+    required Duration totalDuration,
+    double speed = 1.0,
+  }) async {
+    final playlist = ConcatenatingAudioSource(
+      children: [AudioSource.uri(file.uri)],
+      useLazyPreparation: false,
+    );
+    await _playSource(
+      playlist,
+      id: file.uri.toString(),
+      duration: totalDuration,
+      speed: speed,
+      playbackExportFile: file,
+    );
+    return duration;
+  }
+
+  Future<void> appendFileToQueue(File file) async {
+    final playlist = _activePlaylist;
+    if (playlist == null) return;
+    await playlist.add(AudioSource.uri(file.uri));
+    debugPrint('JRI_PLAYLIST_CHUNK_APPENDED count=${playlist.children.length}');
+    if (_player.processingState == ProcessingState.completed &&
+        _player.currentIndex != null) {
+      await _player.seek(Duration.zero, index: playlist.children.length - 1);
+      await _player.play();
+      debugPrint(
+        'JRI_PLAYLIST_RESUMED_AFTER_BUFFER_GAP index=${playlist.children.length - 1}',
+      );
+    }
+  }
+
+  Future<void> _playSource(
+    AudioSource source, {
+    required String id,
+    required Duration duration,
+    required double speed,
+    Uint8List? playbackExportBytes,
+    File? playbackExportFile,
+  }) async {
+    _activePlaylist = source is ConcatenatingAudioSource ? source : null;
     _currentItem = MediaItem(
-      id: uri.toString(),
-      album: 'Generated Speech',
-      title: 'TTS Playback',
+      id: id,
+      album: 'Just Read It',
+      title: 'Read-Aloud Playback',
       duration: duration,
     );
     mediaItem.add(_currentItem);
 
     await _player.stop();
-    await _player.setAudioSource(AudioSource.uri(uri));
+    await _player.setSpeed(speed.clamp(0.5, 3.0));
+    await _player.setAudioSource(source);
     unawaited(_player.play());
-    return duration;
+    await _waitForNativePlaybackStarted(duration);
+    await _exportPlaybackAudioIfRequested(
+      sourceFile: playbackExportFile,
+      sourceBytes: playbackExportBytes,
+    );
+  }
+
+  Future<void> _waitForNativePlaybackStarted(Duration duration) async {
+    final requiredProgress = duration < const Duration(seconds: 1)
+        ? const Duration(milliseconds: 100)
+        : const Duration(milliseconds: 500);
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+    while (DateTime.now().isBefore(deadline)) {
+      if (_player.playing && _player.position >= requiredProgress) {
+        debugPrint(
+          'JRI_PLAYBACK_STARTED position=${_player.position.inMilliseconds}ms '
+          'speed=${_player.speed}',
+        );
+        return;
+      }
+      if (_player.processingState == ProcessingState.completed &&
+          _player.position > Duration.zero) {
+        debugPrint(
+          'JRI_PLAYBACK_COMPLETED position=${_player.position.inMilliseconds}ms '
+          'speed=${_player.speed}',
+        );
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    throw StateError(
+      'Native playback did not advance beyond '
+      '${requiredProgress.inMilliseconds}ms.',
+    );
+  }
+
+  Future<void> _exportPlaybackAudioIfRequested({
+    File? sourceFile,
+    Uint8List? sourceBytes,
+  }) async {
+    const shouldExport = bool.fromEnvironment('JRI_EXPORT_TTS_WAV');
+    if (!shouldExport) return;
+    final cacheDir = await getTemporaryDirectory();
+    final file = File('${cacheDir.path}/just_read_it_playback_sample.wav');
+    if (sourceFile != null) {
+      await sourceFile.copy(file.path);
+    } else if (sourceBytes != null) {
+      await file.writeAsBytes(sourceBytes, flush: true);
+    } else {
+      throw StateError('No playback audio source available to export.');
+    }
+    debugPrint('JRI_PLAYBACK_WAV_PATH=${file.path}');
+    debugPrint('JRI_PLAYBACK_WAV_READY');
   }
 
   Stream<Duration> positionStream() => _player.positionStream;
+  Stream<int?> currentIndexStream() => _player.currentIndexStream;
+  Duration get position => _player.position;
+  int? get currentIndex => _player.currentIndex;
+  Stream<bool> playingStream() => _player.playingStream;
+  bool get isPlaying => _player.playing;
+
+  Future<void> togglePlayPause() async {
+    if (_player.playing) {
+      await pause();
+    } else {
+      await play();
+    }
+  }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    if (_player.processingState == ProcessingState.completed) {
+      await _player.seek(Duration.zero);
+    }
+    await _player.play();
+  }
 
   @override
   Future<void> pause() => _player.pause();
 
   @override
   Future<void> stop() async {
+    _activePlaylist = null;
+    await _player.pause();
+    await _player.seek(Duration.zero);
     await _player.stop();
-    await _cleanupTempFile();
-    await super.stop();
+    debugPrint('JRI_PLAYBACK_STOPPED');
+    playbackState.add(playbackState.value.copyWith(
+      playing: false,
+      processingState: AudioProcessingState.idle,
+      updatePosition: Duration.zero,
+    ));
   }
 
   @override
@@ -97,10 +235,12 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     playbackState.add(
       PlaybackState(
         controls: [
+          MediaControl.rewind,
           if (playing) MediaControl.pause else MediaControl.play,
           MediaControl.stop,
+          MediaControl.fastForward,
         ],
-        androidCompactActionIndices: const [0, 1],
+        androidCompactActionIndices: const [0, 1, 3],
         playing: playing,
         processingState: processingState,
         updatePosition: _player.position,
@@ -123,17 +263,6 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
       case ProcessingState.completed:
         return AudioProcessingState.completed;
     }
-  }
-
-  Future<void> _cleanupTempFile() async {
-    final file = _lastTempFile;
-    if (file == null) {
-      return;
-    }
-    if (await file.exists()) {
-      await file.delete().catchError((_) {});
-    }
-    _lastTempFile = null;
   }
 
   Uint8List _buildWavBytes(Uint8List pcmBytes, int sampleRate) {
@@ -192,5 +321,28 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
     writeString('data');
     writeUint32(dataLength);
     return Uint8List.fromList(builder.takeBytes());
+  }
+}
+
+// ignore: experimental_member_use
+class _MemoryAudioSource extends StreamAudioSource {
+  _MemoryAudioSource(this.bytes);
+
+  final Uint8List bytes;
+
+  @override
+  // ignore: experimental_member_use
+  Future<StreamAudioResponse> request([int? start, int? end]) async {
+    final resolvedStart = start ?? 0;
+    final resolvedEnd = end ?? bytes.length;
+    final slice = bytes.sublist(resolvedStart, resolvedEnd);
+    // ignore: experimental_member_use
+    return StreamAudioResponse(
+      sourceLength: bytes.length,
+      contentLength: slice.length,
+      offset: resolvedStart,
+      stream: Stream.value(slice),
+      contentType: 'audio/wav',
+    );
   }
 }

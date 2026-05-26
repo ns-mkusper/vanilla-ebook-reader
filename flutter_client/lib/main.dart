@@ -1,20 +1,20 @@
-import 'dart:io';
+import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import 'package:genui/genui.dart';
-import 'package:tts_flutter_client/api.dart' as bridge;
-import 'package:tts_flutter_client/frb_generated.dart';
 
+import 'services/bridge_service.dart';
 import 'ui/editor_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  configureGenUiLogging();
-  await initializeTtsBridge();
   runApp(const ProviderScope(child: TtsApp()));
+  unawaited(
+    initializeTtsBridge().catchError((Object err, StackTrace stack) {
+      debugPrint('TTS bridge initialization failed: $err');
+      debugPrintStack(stackTrace: stack);
+    }),
+  );
 }
 
 class TtsApp extends StatelessWidget {
@@ -23,54 +23,11 @@ class TtsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TTS Beast',
-      theme: ThemeData.dark(),
+      title: 'Just Read It',
+      theme: ThemeData.light(),
+      darkTheme: ThemeData.dark(),
+      themeMode: ThemeMode.system,
       home: const EditorScreen(),
     );
   }
-}
-
-bool _bridgeInitialized = false;
-
-Future<void> initializeTtsBridge() async {
-  if (_bridgeInitialized) {
-    return;
-  }
-  if (kIsWeb) {
-    throw UnsupportedError('Web is not yet supported for the TTS engine');
-  }
-
-  final library = _resolveExternalLibrary();
-  await TtsBridge.init(externalLibrary: library);
-  const rustLogFilter = String.fromEnvironment('RUST_LOG', defaultValue: '');
-  await bridge.initTracing(
-    filter: rustLogFilter.isEmpty ? null : rustLogFilter,
-  );
-  await bridge.bootstrapDefaultEngine();
-  _bridgeInitialized = true;
-}
-
-ExternalLibrary _resolveExternalLibrary() {
-  final name = _libraryFileName();
-  final workspaceLib = File('${Directory.current.path}/target/debug/$name');
-  if (workspaceLib.existsSync()) {
-    return ExternalLibrary.open(workspaceLib.path);
-  }
-  return ExternalLibrary.open(name);
-}
-
-String _libraryFileName() {
-  if (Platform.isAndroid || Platform.isLinux) {
-    return 'librust_core.so';
-  }
-  if (Platform.isIOS) {
-    return 'rust_core.framework/rust_core';
-  }
-  if (Platform.isMacOS) {
-    return 'librust_core.dylib';
-  }
-  if (Platform.isWindows) {
-    return 'rust_core.dll';
-  }
-  return 'librust_core.so';
 }

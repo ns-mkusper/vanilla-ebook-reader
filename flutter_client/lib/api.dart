@@ -53,6 +53,7 @@ final BigInt startTextIdx;
                     const EngineBackend._();
 
                      const factory EngineBackend.auto({   required String modelPath , }) = EngineBackend_Auto;
+ const factory EngineBackend.flite() = EngineBackend_Flite;
  const factory EngineBackend.piper(  PiperBackendConfig field0,) = EngineBackend_Piper;
 
                     

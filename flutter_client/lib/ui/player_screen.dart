@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../services/model_repository.dart';
+import '../services/audio_handler.dart';
 import '../services/text_analysis.dart';
 import '../services/tts_service.dart';
 
@@ -15,6 +15,8 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+  var _paused = false;
+
   @override
   void initState() {
     super.initState();
@@ -30,42 +32,100 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     });
   }
 
+  Future<void> _togglePause() async {
+    final shouldResume = _paused;
+    setState(() => _paused = !shouldResume);
+    ref.read(ttsStatusProvider.notifier).state =
+        shouldResume ? 'Playing' : 'Paused';
+    final audioHandler = await ref.read(audioHandlerProvider);
+    if (shouldResume) {
+      await audioHandler.play();
+    } else {
+      await audioHandler.pause();
+    }
+  }
+
+  Future<void> _stopPlayback() async {
+    ref.read(ttsStopSignalProvider.notifier).state++;
+    final audioHandler = await ref.read(audioHandlerProvider);
+    await audioHandler.stop();
+    if (!mounted) return;
+    setState(() => _paused = false);
+    ref.read(currentWordIndexProvider.notifier).state = 0;
+    ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+  }
+
   @override
   Widget build(BuildContext context) {
     final wordIndex = ref.watch(currentWordIndexProvider);
     final boundaries = ref.watch(wordBoundariesProvider);
     final effectiveBoundaries =
         boundaries.isEmpty ? computeWordBoundaries(widget.text) : boundaries;
-    final config = ref.watch(ttsConfigProvider);
-    final usesPiper = config.voice.backend == TtsEngineBackend.piper;
+    final status = ref.watch(ttsStatusProvider);
+    final totalWords = effectiveBoundaries.length;
+    final currentWord = totalWords == 0 ? 0 : wordIndex + 1;
+    final progressValue = totalWords == 0
+        ? 0.0
+        : (currentWord / totalWords).clamp(0.0, 1.0).toDouble();
     return Scaffold(
       appBar: AppBar(title: const Text('Streaming Playback')),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Word $currentWord of $totalWords',
+              key: const Key('player.progress'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            LinearProgressIndicator(
+              key: const Key('player.seekbar'),
+              value: progressValue,
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: const Key('player.pause'),
+                    onPressed: _togglePause,
+                    icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
+                    label: Text(_paused ? 'Resume' : 'Pause'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    key: const Key('player.stop'),
+                    onPressed: _stopPlayback,
+                    icon: const Icon(Icons.stop),
+                    label: const Text('Stop'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Chip(
-                avatar: Icon(
-                  usesPiper ? Icons.graphic_eq : Icons.bolt,
-                  color: Theme.of(context).colorScheme.onSecondary,
-                ),
-                backgroundColor: usesPiper
-                    ? Theme.of(context).colorScheme.secondary
-                    : Theme.of(context).colorScheme.tertiaryContainer,
-                label: Text(
-                  usesPiper
-                      ? 'Real voice: ${config.voice.displayName}'
-                      : 'Synth preview voice',
-                ),
-              ),
+            Text(
+              status,
+              key: const Key('player.status'),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
-            const Text('Live Highlight'),
             const SizedBox(height: 12),
             Expanded(
               child: _HighlightedText(
+                key: const Key('player.highlight.text'),
                 text: widget.text,
                 activeIndex: wordIndex,
                 boundaries: effectiveBoundaries,
@@ -80,6 +140,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
 class _HighlightedText extends StatelessWidget {
   const _HighlightedText({
+    super.key,
     required this.text,
     required this.activeIndex,
     required this.boundaries,
@@ -124,6 +185,7 @@ class _HighlightedText extends StatelessWidget {
     }
     return SingleChildScrollView(
       child: RichText(
+        key: const Key('player.highlight.rich_text'),
         text: TextSpan(
           style: Theme.of(context).textTheme.bodyLarge,
           children: spans,

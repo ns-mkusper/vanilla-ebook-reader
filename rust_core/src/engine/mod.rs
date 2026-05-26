@@ -7,6 +7,9 @@ use thiserror::Error;
 #[cfg(all(feature = "piper", not(target_os = "windows")))]
 use crate::api::PiperBackendConfig;
 
+#[cfg(feature = "flite")]
+pub mod flite;
+
 #[cfg(all(feature = "piper", not(target_os = "windows")))]
 pub mod piper;
 
@@ -31,6 +34,8 @@ pub enum RegistryError {
 
 pub struct EngineRegistryHandle {
     mock_engine: Arc<MockEngine>,
+    #[cfg(feature = "flite")]
+    flite_engine: Arc<flite::FliteEngine>,
     #[cfg(all(feature = "piper", not(target_os = "windows")))]
     piper_engine: Arc<RwLock<Option<CachedPiperEngine>>>,
     active_model: Arc<RwLock<Option<String>>>,
@@ -40,6 +45,8 @@ impl Clone for EngineRegistryHandle {
     fn clone(&self) -> Self {
         Self {
             mock_engine: Arc::clone(&self.mock_engine),
+            #[cfg(feature = "flite")]
+            flite_engine: Arc::clone(&self.flite_engine),
             #[cfg(all(feature = "piper", not(target_os = "windows")))]
             piper_engine: Arc::clone(&self.piper_engine),
             active_model: Arc::clone(&self.active_model),
@@ -51,6 +58,8 @@ impl EngineRegistryHandle {
     pub fn new() -> Self {
         Self {
             mock_engine: Arc::new(MockEngine::default()),
+            #[cfg(feature = "flite")]
+            flite_engine: Arc::new(flite::FliteEngine::new()),
             #[cfg(all(feature = "piper", not(target_os = "windows")))]
             piper_engine: Arc::new(RwLock::new(None)),
             active_model: Arc::new(RwLock::new(None)),
@@ -65,6 +74,12 @@ impl EngineRegistryHandle {
         self.mock_engine.set_last_model(label);
         *self.active_model.write() = Some(label.to_string());
         self.mock_engine.clone()
+    }
+
+    #[cfg(feature = "flite")]
+    pub fn flite_engine(&self) -> Arc<dyn TTSEngine> {
+        *self.active_model.write() = Some("embedded-flite-cmu-us-kal".to_string());
+        self.flite_engine.clone()
     }
 
     #[cfg(all(feature = "piper", not(target_os = "windows")))]
@@ -149,7 +164,7 @@ impl TTSEngine for MockEngine {
                 pcm.push(sample);
             }
             // brief silence between words
-            pcm.extend(std::iter::repeat(0).take((sample_rate as f32 * 0.05) as usize));
+            pcm.extend(std::iter::repeat_n(0, (sample_rate as f32 * 0.05) as usize));
         }
         if pcm.is_empty() {
             pcm.resize(800, 0);
@@ -194,4 +209,27 @@ pub fn chunk_audio_samples(
     }
 
     frames
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MockEngine, TTSEngine};
+
+    #[test]
+    fn mock_orbit_voice_produces_deterministic_audible_audio() {
+        let engine = MockEngine::default();
+        let frames = engine
+            .synthesize("alpha beta")
+            .expect("mock voice should synthesize");
+        let samples: Vec<i16> = frames
+            .iter()
+            .flat_map(|frame| frame.samples.iter().copied())
+            .collect();
+
+        assert_eq!(frames[0].sample_rate, 16_000);
+        assert_eq!(samples.len(), 10_560);
+        assert!(samples.iter().map(|sample| sample.abs()).max().unwrap() > 2_000);
+        assert!(samples[1_000].abs() > 500);
+        assert_ne!(samples[1_000], samples[6_280]);
+    }
 }

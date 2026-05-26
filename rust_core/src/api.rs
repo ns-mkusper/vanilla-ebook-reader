@@ -63,6 +63,7 @@ pub struct EngineRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EngineBackend {
     Auto { model_path: String },
+    Flite,
     Piper(PiperBackendConfig),
 }
 
@@ -176,6 +177,7 @@ fn dispatch_frames(frames: Vec<AudioFrame>, sink: StreamSink<AudioChunk>) {
 fn backend_model_path(backend: &EngineBackend) -> &str {
     match backend {
         EngineBackend::Auto { model_path } => model_path,
+        EngineBackend::Flite => "embedded-flite-cmu-us-kal",
         EngineBackend::Piper(config) => &config.model_path,
     }
 }
@@ -186,6 +188,18 @@ fn resolve_engine(
 ) -> Result<Arc<dyn TTSEngine>, RegistryError> {
     match backend {
         EngineBackend::Auto { model_path } => Ok(handle.mock_engine(model_path)),
+        EngineBackend::Flite => {
+            #[cfg(feature = "flite")]
+            {
+                Ok(handle.flite_engine())
+            }
+            #[cfg(not(feature = "flite"))]
+            {
+                Err(RegistryError::LoadFailed(
+                    "embedded Flite backend not compiled in this build".to_string(),
+                ))
+            }
+        }
         EngineBackend::Piper(config) => {
             #[cfg(all(feature = "piper", not(target_os = "windows")))]
             {

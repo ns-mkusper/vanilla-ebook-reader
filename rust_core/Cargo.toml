@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "High-performance streaming TTS core exposed over Flutter Rust Bridge"
 license = "MIT OR Apache-2.0"
-repository = "https://example.com/tts-beast"
+repository = "https://github.com/ns-mkusper/just-read-it"
 
 [lib]
 name = "rust_core"
@@ -25,8 +25,9 @@ tracing-log = "0.1"
 log = "0.4"
 
 [features]
-default = ["bridge", "piper"]
+default = ["bridge", "piper", "flite"]
 piper = ["dep:piper-rs"]
+flite = []
 bridge = ["flutter_rust_bridge"]
 
 [build-dependencies]

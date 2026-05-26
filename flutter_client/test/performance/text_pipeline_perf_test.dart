@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tts_flutter_client/services/text_analysis.dart';
+import 'package:just_read_it/services/text_analysis.dart';
 
 void main() {
   const iterations = 200;
@@ -26,7 +26,8 @@ void main() {
       final boundaries = computeWordBoundaries(sampleText);
       final sw = Stopwatch()..start();
       for (var i = 0; i < iterations; i++) {
-        final cues = buildWordCues(boundaries.length, const Duration(seconds: 240));
+        final cues =
+            buildWordCues(boundaries.length, const Duration(seconds: 240));
         expect(cues, isNotEmpty);
       }
       sw.stop();

@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 final modelRepositoryProvider =
     Provider<ModelRepository>((_) => ModelRepository());
 
-enum TtsEngineBackend { mock, piper }
+enum TtsEngineBackend { androidSystem, fliteClassic, piper }
 
 class VoiceModelPreset {
   const VoiceModelPreset({
@@ -20,6 +20,9 @@ class VoiceModelPreset {
     required this.backend,
     this.assetModelPath,
     this.assetConfigPath,
+    this.androidEngine,
+    this.androidVoiceName,
+    this.androidVoiceLocale = 'en-US',
   });
 
   final String id;
@@ -28,6 +31,9 @@ class VoiceModelPreset {
   final TtsEngineBackend backend;
   final String? assetModelPath;
   final String? assetConfigPath;
+  final String? androidEngine;
+  final String? androidVoiceName;
+  final String androidVoiceLocale;
 }
 
 @immutable
@@ -38,6 +44,9 @@ class VoiceSelection {
     required this.backend,
     this.modelPath,
     this.configPath,
+    this.androidEngine,
+    this.androidVoiceName,
+    this.androidVoiceLocale = 'en-US',
   });
 
   final String id;
@@ -45,10 +54,16 @@ class VoiceSelection {
   final TtsEngineBackend backend;
   final String? modelPath;
   final String? configPath;
+  final String? androidEngine;
+  final String? androidVoiceName;
+  final String androidVoiceLocale;
 
   VoiceSelection copyWith({
     String? modelPath,
     String? configPath,
+    String? androidEngine,
+    String? androidVoiceName,
+    String? androidVoiceLocale,
   }) {
     return VoiceSelection(
       id: id,
@@ -56,12 +71,23 @@ class VoiceSelection {
       backend: backend,
       modelPath: modelPath ?? this.modelPath,
       configPath: configPath ?? this.configPath,
+      androidEngine: androidEngine ?? this.androidEngine,
+      androidVoiceName: androidVoiceName ?? this.androidVoiceName,
+      androidVoiceLocale: androidVoiceLocale ?? this.androidVoiceLocale,
     );
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, displayName, backend, modelPath, configPath);
+  int get hashCode => Object.hash(
+        id,
+        displayName,
+        backend,
+        modelPath,
+        configPath,
+        androidEngine,
+        androidVoiceName,
+        androidVoiceLocale,
+      );
 
   @override
   bool operator ==(Object other) {
@@ -70,26 +96,41 @@ class VoiceSelection {
         displayName == other.displayName &&
         backend == other.backend &&
         other.modelPath == modelPath &&
-        other.configPath == configPath;
+        other.configPath == configPath &&
+        other.androidEngine == androidEngine &&
+        other.androidVoiceName == androidVoiceName &&
+        other.androidVoiceLocale == androidVoiceLocale;
   }
 }
 
-const defaultVoiceId = 'amy-low';
+const defaultVoiceId = String.fromEnvironment(
+  'JRI_DEFAULT_VOICE_ID',
+  defaultValue: 'flite-classic',
+);
 
 const voiceModelPresets = <VoiceModelPreset>[
   VoiceModelPreset(
-    id: 'amy-low',
-    label: 'Amy · en-US · low',
-    description: 'Bundled Piper voice (fast 20 kHz female).',
-    backend: TtsEngineBackend.piper,
-    assetModelPath: 'assets/models/en_us_amy_low.onnx',
-    assetConfigPath: 'assets/models/en_us_amy_low.onnx.json',
+    id: 'android-male',
+    label: 'Android Male Voice',
+    description:
+        'Prefers a lower-pitched male English system voice, then plays generated audio with the Just Read It media player.',
+    backend: TtsEngineBackend.androidSystem,
+    androidVoiceName: 'en-us-x-iom-local',
   ),
   VoiceModelPreset(
-    id: 'mock-orbit',
-    label: 'Orbit (procedural)',
-    description: 'Fast synthetic voice useful for rapid iteration.',
-    backend: TtsEngineBackend.mock,
+    id: 'android-system',
+    label: 'Android Default Voice',
+    description:
+        'Uses the device default TTS engine and voice, then plays generated audio with the Just Read It media player.',
+    backend: TtsEngineBackend.androidSystem,
+  ),
+  VoiceModelPreset(
+    id: 'flite-classic',
+    label: 'Motorola Male (Flite)',
+    description:
+        'Bundled offline Flite KAL male voice. No separate Android TTS engine install required.',
+    backend: TtsEngineBackend.fliteClassic,
+    androidEngine: 'edu.cmu.cs.speech.tts.flite',
   ),
 ];
 
@@ -101,7 +142,8 @@ class ModelRepository {
       if (selection.modelPath != null) {
         return selection;
       }
-      return selection.copyWith(modelPath: selection.id);
+      final preset = voiceModelPresets.firstWhere((p) => p.id == selection.id);
+      return _selectionFromPreset(preset, modelPath: preset.id);
     }
     if (selection.modelPath != null && selection.configPath != null) {
       return selection;
@@ -124,12 +166,7 @@ class ModelRepository {
 
   Future<VoiceSelection> _materialize(VoiceModelPreset preset) async {
     if (preset.backend != TtsEngineBackend.piper) {
-      return VoiceSelection(
-        id: preset.id,
-        displayName: preset.label,
-        backend: preset.backend,
-        modelPath: preset.id,
-      );
+      return _selectionFromPreset(preset, modelPath: preset.id);
     }
     final modelAsset = preset.assetModelPath;
     final configAsset = preset.assetConfigPath;
@@ -152,6 +189,21 @@ class ModelRepository {
       backend: preset.backend,
       modelPath: modelFile.path,
       configPath: configFile.path,
+    );
+  }
+
+  VoiceSelection _selectionFromPreset(
+    VoiceModelPreset preset, {
+    String? modelPath,
+  }) {
+    return VoiceSelection(
+      id: preset.id,
+      displayName: preset.label,
+      backend: preset.backend,
+      modelPath: modelPath,
+      androidEngine: preset.androidEngine,
+      androidVoiceName: preset.androidVoiceName,
+      androidVoiceLocale: preset.androidVoiceLocale,
     );
   }
 

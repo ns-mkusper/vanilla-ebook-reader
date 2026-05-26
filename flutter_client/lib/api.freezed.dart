@@ -19,18 +19,21 @@ mixin _$EngineBackend {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function(String modelPath) auto,
+    required TResult Function() flite,
     required TResult Function(PiperBackendConfig field0) piper,
   }) =>
       throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(String modelPath)? auto,
+    TResult? Function()? flite,
     TResult? Function(PiperBackendConfig field0)? piper,
   }) =>
       throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(String modelPath)? auto,
+    TResult Function()? flite,
     TResult Function(PiperBackendConfig field0)? piper,
     required TResult orElse(),
   }) =>
@@ -38,18 +41,21 @@ mixin _$EngineBackend {
   @optionalTypeArgs
   TResult map<TResult extends Object?>({
     required TResult Function(EngineBackend_Auto value) auto,
+    required TResult Function(EngineBackend_Flite value) flite,
     required TResult Function(EngineBackend_Piper value) piper,
   }) =>
       throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
     TResult? Function(EngineBackend_Auto value)? auto,
+    TResult? Function(EngineBackend_Flite value)? flite,
     TResult? Function(EngineBackend_Piper value)? piper,
   }) =>
       throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(EngineBackend_Auto value)? auto,
+    TResult Function(EngineBackend_Flite value)? flite,
     TResult Function(EngineBackend_Piper value)? piper,
     required TResult orElse(),
   }) =>
@@ -148,6 +154,7 @@ class _$EngineBackend_AutoImpl extends EngineBackend_Auto {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function(String modelPath) auto,
+    required TResult Function() flite,
     required TResult Function(PiperBackendConfig field0) piper,
   }) {
     return auto(modelPath);
@@ -157,6 +164,7 @@ class _$EngineBackend_AutoImpl extends EngineBackend_Auto {
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(String modelPath)? auto,
+    TResult? Function()? flite,
     TResult? Function(PiperBackendConfig field0)? piper,
   }) {
     return auto?.call(modelPath);
@@ -166,6 +174,7 @@ class _$EngineBackend_AutoImpl extends EngineBackend_Auto {
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(String modelPath)? auto,
+    TResult Function()? flite,
     TResult Function(PiperBackendConfig field0)? piper,
     required TResult orElse(),
   }) {
@@ -179,6 +188,7 @@ class _$EngineBackend_AutoImpl extends EngineBackend_Auto {
   @optionalTypeArgs
   TResult map<TResult extends Object?>({
     required TResult Function(EngineBackend_Auto value) auto,
+    required TResult Function(EngineBackend_Flite value) flite,
     required TResult Function(EngineBackend_Piper value) piper,
   }) {
     return auto(this);
@@ -188,6 +198,7 @@ class _$EngineBackend_AutoImpl extends EngineBackend_Auto {
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
     TResult? Function(EngineBackend_Auto value)? auto,
+    TResult? Function(EngineBackend_Flite value)? flite,
     TResult? Function(EngineBackend_Piper value)? piper,
   }) {
     return auto?.call(this);
@@ -197,6 +208,7 @@ class _$EngineBackend_AutoImpl extends EngineBackend_Auto {
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(EngineBackend_Auto value)? auto,
+    TResult Function(EngineBackend_Flite value)? flite,
     TResult Function(EngineBackend_Piper value)? piper,
     required TResult orElse(),
   }) {
@@ -219,6 +231,119 @@ abstract class EngineBackend_Auto extends EngineBackend {
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$EngineBackend_AutoImplCopyWith<_$EngineBackend_AutoImpl> get copyWith =>
       throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$EngineBackend_FliteImplCopyWith<$Res> {
+  factory _$$EngineBackend_FliteImplCopyWith(_$EngineBackend_FliteImpl value,
+          $Res Function(_$EngineBackend_FliteImpl) then) =
+      __$$EngineBackend_FliteImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$EngineBackend_FliteImplCopyWithImpl<$Res>
+    extends _$EngineBackendCopyWithImpl<$Res, _$EngineBackend_FliteImpl>
+    implements _$$EngineBackend_FliteImplCopyWith<$Res> {
+  __$$EngineBackend_FliteImplCopyWithImpl(_$EngineBackend_FliteImpl _value,
+      $Res Function(_$EngineBackend_FliteImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of EngineBackend
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$EngineBackend_FliteImpl extends EngineBackend_Flite {
+  const _$EngineBackend_FliteImpl() : super._();
+
+  @override
+  String toString() {
+    return 'EngineBackend.flite()';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$EngineBackend_FliteImpl);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String modelPath) auto,
+    required TResult Function() flite,
+    required TResult Function(PiperBackendConfig field0) piper,
+  }) {
+    return flite();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String modelPath)? auto,
+    TResult? Function()? flite,
+    TResult? Function(PiperBackendConfig field0)? piper,
+  }) {
+    return flite?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String modelPath)? auto,
+    TResult Function()? flite,
+    TResult Function(PiperBackendConfig field0)? piper,
+    required TResult orElse(),
+  }) {
+    if (flite != null) {
+      return flite();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(EngineBackend_Auto value) auto,
+    required TResult Function(EngineBackend_Flite value) flite,
+    required TResult Function(EngineBackend_Piper value) piper,
+  }) {
+    return flite(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(EngineBackend_Auto value)? auto,
+    TResult? Function(EngineBackend_Flite value)? flite,
+    TResult? Function(EngineBackend_Piper value)? piper,
+  }) {
+    return flite?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(EngineBackend_Auto value)? auto,
+    TResult Function(EngineBackend_Flite value)? flite,
+    TResult Function(EngineBackend_Piper value)? piper,
+    required TResult orElse(),
+  }) {
+    if (flite != null) {
+      return flite(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class EngineBackend_Flite extends EngineBackend {
+  const factory EngineBackend_Flite() = _$EngineBackend_FliteImpl;
+  const EngineBackend_Flite._() : super._();
 }
 
 /// @nodoc
@@ -291,6 +416,7 @@ class _$EngineBackend_PiperImpl extends EngineBackend_Piper {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function(String modelPath) auto,
+    required TResult Function() flite,
     required TResult Function(PiperBackendConfig field0) piper,
   }) {
     return piper(field0);
@@ -300,6 +426,7 @@ class _$EngineBackend_PiperImpl extends EngineBackend_Piper {
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(String modelPath)? auto,
+    TResult? Function()? flite,
     TResult? Function(PiperBackendConfig field0)? piper,
   }) {
     return piper?.call(field0);
@@ -309,6 +436,7 @@ class _$EngineBackend_PiperImpl extends EngineBackend_Piper {
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(String modelPath)? auto,
+    TResult Function()? flite,
     TResult Function(PiperBackendConfig field0)? piper,
     required TResult orElse(),
   }) {
@@ -322,6 +450,7 @@ class _$EngineBackend_PiperImpl extends EngineBackend_Piper {
   @optionalTypeArgs
   TResult map<TResult extends Object?>({
     required TResult Function(EngineBackend_Auto value) auto,
+    required TResult Function(EngineBackend_Flite value) flite,
     required TResult Function(EngineBackend_Piper value) piper,
   }) {
     return piper(this);
@@ -331,6 +460,7 @@ class _$EngineBackend_PiperImpl extends EngineBackend_Piper {
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
     TResult? Function(EngineBackend_Auto value)? auto,
+    TResult? Function(EngineBackend_Flite value)? flite,
     TResult? Function(EngineBackend_Piper value)? piper,
   }) {
     return piper?.call(this);
@@ -340,6 +470,7 @@ class _$EngineBackend_PiperImpl extends EngineBackend_Piper {
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(EngineBackend_Auto value)? auto,
+    TResult Function(EngineBackend_Flite value)? flite,
     TResult Function(EngineBackend_Piper value)? piper,
     required TResult orElse(),
   }) {

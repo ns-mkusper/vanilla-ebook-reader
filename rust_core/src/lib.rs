@@ -1,4 +1,7 @@
-#![cfg_attr(feature = "bridge", allow(unexpected_cfgs))]
+#![cfg_attr(
+    feature = "bridge",
+    allow(unexpected_cfgs, clippy::not_unsafe_ptr_arg_deref)
+)]
 
 pub mod api;
 pub mod audio;
