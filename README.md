@@ -9,16 +9,6 @@ The project is currently focused on Android. It ships a production-style mobile 
   <img src="docs/assets/android-player-playback.png" alt="Just Read It player showing synchronized highlighting and playback controls" width="320" />
 </p>
 
-## What it does
-
-- **Import real documents**: TXT, Markdown, and EPUB import through the Android file browser / Storage Access Framework. Provider-backed files such as Google Drive documents are read from picker bytes instead of requiring filesystem paths.
-- **Keep text editable**: imported or pasted content remains editable and persists across app restarts.
-- **Read aloud with real playback**: generated speech is played through the app's native media pipeline rather than a fake timer or UI-only mock.
-- **Highlight while listening**: word boundaries and playback progress drive synchronized highlighting in the reader view.
-- **Control playback everywhere**: `audio_service` + `just_audio` provide foreground/background playback, pause/resume/stop, speed control, and Android media notification integration.
-- **Tune the voice**: choose between embedded Flite and Android system TTS paths, then adjust rate and pitch.
-- **Follow the system theme**: the app uses the platform light/dark preference by default.
-
 ## Architecture
 
 ```text
