@@ -58,7 +58,7 @@ flutter drive \
   -d "$DEVICE_ID" \
   --dart-define=JRI_EXPORT_TTS_WAV=true \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
-  > build/screenshots/flutter-run.log 2>&1
+  2>&1 | tee build/screenshots/flutter-run.log
 
 flutter drive \
   --driver=test_driver/integration_test.dart \
@@ -68,7 +68,7 @@ flutter drive \
   --dart-define=JRI_DEFAULT_VOICE_ID=flite-classic \
   --dart-define=JRI_EXPECTED_LONG_DOC_VOICE_LABEL='Motorola Male (Flite)' \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
-  >> build/screenshots/flutter-run.log 2>&1
+  2>&1 | tee -a build/screenshots/flutter-run.log
 
 if ! grep -q "JRI_LONG_DOC_FULL_TEXT_PLAYBACK_VALIDATED" build/screenshots/flutter-run.log; then
   echo "Full long markdown playback was not validated" >&2
