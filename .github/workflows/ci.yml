@@ -94,6 +94,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Flutter pub get
         run: flutter pub get
       - name: Build iOS simulator app with Rust Flite
