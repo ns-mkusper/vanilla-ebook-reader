@@ -87,6 +87,81 @@ jobs:
         with:
           targets: aarch64-linux-android
 
+      - name: Generate Android project
+        if: steps.version.outputs.skip != 'true'
+        working-directory: flutter_client
+        run: flutter create --platforms=android --project-name just_read_it .
+
+      - name: Patch Android audio service activity
+        if: steps.version.outputs.skip != 'true'
+        working-directory: flutter_client
+        run: |
+          MAIN_ACTIVITY=$(find android/app/src/main -name MainActivity.kt -o -name MainActivity.java | head -1)
+          if [ -z "$MAIN_ACTIVITY" ]; then
+            echo "MainActivity not found" >&2
+            exit 1
+          fi
+          if [[ "$MAIN_ACTIVITY" == *.kt ]]; then
+            cat > "$MAIN_ACTIVITY" <<'KOTLIN'
+          package com.example.just_read_it
+
+          class MainActivity : com.ryanheise.audioservice.AudioServiceActivity()
+          KOTLIN
+          else
+            cat > "$MAIN_ACTIVITY" <<'JAVA'
+          package com.example.just_read_it;
+
+          public class MainActivity extends com.ryanheise.audioservice.AudioServiceActivity {}
+          JAVA
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          if 'xmlns:tools=' not in text:
+              text = text.replace(
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools">',
+              )
+          permissions = [
+              '<uses-permission android:name="android.permission.WAKE_LOCK" />',
+              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />',
+          ]
+          for permission in permissions:
+              if permission not in text:
+                  text = text.replace('<application', f'{permission}\n    <application', 1)
+          if 'android:usesCleartextTraffic=' not in text:
+              text = text.replace(
+                  '<application',
+                  '<application android:usesCleartextTraffic="true"',
+                  1,
+              )
+          service_block = '''
+                  <service
+                      android:name="com.ryanheise.audioservice.AudioService"
+                      android:exported="true"
+                      android:foregroundServiceType="mediaPlayback"
+                      tools:ignore="Instantiatable">
+                      <intent-filter>
+                          <action android:name="android.media.browse.MediaBrowserService" />
+                      </intent-filter>
+                  </service>
+                  <receiver
+                      android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+                      android:exported="true"
+                      tools:ignore="Instantiatable">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MEDIA_BUTTON" />
+                      </intent-filter>
+                  </receiver>
+          '''
+          if 'com.ryanheise.audioservice.AudioService' not in text:
+              text = text.replace('    </application>', service_block + '    </application>')
+          manifest.write_text(text)
+          PY
+
       - name: Install cargo-ndk
         if: steps.version.outputs.skip != 'true'
         run: cargo install cargo-ndk --locked
