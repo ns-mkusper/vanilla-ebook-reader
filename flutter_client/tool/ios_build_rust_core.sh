@@ -46,7 +46,7 @@ done
 unique_targets=()
 for target in "${rust_targets[@]}"; do
   seen=false
-  for existing in "${unique_targets[@]}"; do
+  for existing in ${unique_targets[@]+"${unique_targets[@]}"}; do
     if [[ "$existing" == "$target" ]]; then
       seen=true
       break
