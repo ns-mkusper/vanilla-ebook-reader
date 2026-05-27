@@ -61,8 +61,12 @@ fn fetch_flite(destination: &Path) {
 }
 
 const FLITE_FILES: &[&str] = &[
+    "src/audio/audio.c",
+    "src/audio/au_none.c",
     "src/audio/au_streaming.c",
     "src/cg/cst_cg.c",
+    "src/cg/cst_cg_dump_voice.c",
+    "src/cg/cst_cg_load_voice.c",
     "src/cg/cst_cg_map.c",
     "src/cg/cst_mlpg.c",
     "src/cg/cst_mlsa.c",
@@ -106,6 +110,7 @@ const FLITE_FILES: &[&str] = &[
     "src/utils/cst_mmap_none.c",
     "src/utils/cst_string.c",
     "src/utils/cst_tokenstream.c",
+    "src/utils/cst_url.c",
     "src/utils/cst_val.c",
     "src/utils/cst_val_const.c",
     "src/utils/cst_val_user.c",
