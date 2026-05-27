@@ -102,7 +102,10 @@ fi
 python3 ../tools/validate_wav.py build/screenshots/voice_sample_from_emulator.wav
 test -s build/screenshots/long_markdown_playback_sample_from_emulator.wav
 python3 ../tools/validate_wav.py build/screenshots/long_markdown_playback_sample_from_emulator.wav
-python3 -m pip install --user vosk==0.3.45
+VENV_DIR="build/screenshots/venv"
+python3 -m venv "$VENV_DIR"
+"$VENV_DIR/bin/python" -m pip install --upgrade pip
+"$VENV_DIR/bin/python" -m pip install vosk==0.3.45
 MODEL_DIR="build/screenshots/vosk-model-small-en-us-0.15"
 if [ ! -d "$MODEL_DIR" ]; then
   curl -L --retry 3 -o build/screenshots/vosk-model.zip \
@@ -115,12 +118,12 @@ with zipfile.ZipFile(zip_path) as zf:
     zf.extractall('build/screenshots')
 PY
 fi
-python3 ../tools/validate_wav_stt.py \
+"$VENV_DIR/bin/python" ../tools/validate_wav_stt.py \
   build/screenshots/voice_sample_from_emulator.wav \
   --model "$MODEL_DIR" \
   --expected "Simple book speech fixture This simple book is a clear test of imported speech Just Read It should restore the document and read every sentence aloud" \
   --min-coverage 0.60
-rm -rf "$MODEL_DIR" build/screenshots/vosk-model.zip
+rm -rf "$MODEL_DIR" "$VENV_DIR" build/screenshots/vosk-model.zip
 
 test -s build/screenshots/01_txt_import_editor.png
 test -s build/screenshots/02_player_playback.png
