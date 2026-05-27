@@ -105,7 +105,7 @@ python3 ../tools/validate_wav.py build/screenshots/long_markdown_playback_sample
 VENV_DIR="build/screenshots/venv"
 python3 -m venv "$VENV_DIR"
 "$VENV_DIR/bin/python" -m pip install --upgrade pip
-"$VENV_DIR/bin/python" -m pip install vosk==0.3.45
+"$VENV_DIR/bin/python" -m pip install --only-binary=:all: vosk==0.3.45
 MODEL_DIR="build/screenshots/vosk-model-small-en-us-0.15"
 if [ ! -d "$MODEL_DIR" ]; then
   curl -L --retry 3 -o build/screenshots/vosk-model.zip \
