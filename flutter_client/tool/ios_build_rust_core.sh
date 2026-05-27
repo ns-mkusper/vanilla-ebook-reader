@@ -68,7 +68,7 @@ for target in "${unique_targets[@]}"; do
       --target "$target" \
       --no-default-features \
       --features "$FEATURES" \
-      "${CARGO_FLAGS[@]}"
+      ${CARGO_FLAGS[@]+"${CARGO_FLAGS[@]}"}
   )
   lib="$RUST_DIR/target/$target/$PROFILE/librust_core.a"
   if [[ ! -f "$lib" ]]; then
