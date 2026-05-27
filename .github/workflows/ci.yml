@@ -68,6 +68,50 @@ jobs:
         run: cargo check --target aarch64-linux-android --no-default-features
 
 
+  ios-rust-check:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: rust_core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+      - name: Cargo check iOS Rust core
+        run: cargo check --target aarch64-apple-ios-sim --no-default-features --features bridge,flite
+
+  ios-simulator-screenshots:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: flutter_client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - name: Flutter pub get
+        run: flutter pub get
+      - name: Build iOS simulator app with Rust Flite
+        run: flutter build ios --simulator --debug
+      - name: Run full iOS simulator UI flow
+        run: bash tool/ios_screenshots.sh
+      - name: Upload iOS simulator artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-screenshots
+          path: |
+            flutter_client/build/screenshots/*.png
+            flutter_client/build/screenshots/*.log
+            flutter_client/build/screenshots/*.json
+            flutter_client/build/screenshots/*.wav
+          if-no-files-found: error
+
   android-emulator-screenshots:
     runs-on: ubuntu-latest
     defaults:

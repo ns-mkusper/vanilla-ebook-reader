@@ -35,7 +35,6 @@ coverage/
 
 # Flutter generated platform folders (do not commit)
 flutter_client/android/
-flutter_client/ios/
 
 # Android/Gradle
 .gradle/

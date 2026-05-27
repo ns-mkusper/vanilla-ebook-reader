@@ -28,9 +28,11 @@ Further technical notes:
 
 ## Build prerequisites
 
-- Flutter stable with Android SDK/NDK configured.
+- Flutter stable with Android SDK/NDK configured for Android builds.
+- macOS with Xcode for iOS simulator/device builds.
 - Rust stable.
 - `cargo-ndk` for Android Rust library builds.
+- Apple Rust targets for iOS builds (`aarch64-apple-ios`, `aarch64-apple-ios-sim`; `x86_64-apple-ios` when building Intel simulator slices).
 - `flutter_rust_bridge_codegen` matching the pinned Flutter/Rust bridge runtime.
 
 ```bash
@@ -56,6 +58,17 @@ Or use the project helper when appropriate:
 ```bash
 ./tools/build_all.sh codegen
 ```
+
+## iOS build
+
+The iOS app links the Rust Flite bridge as a static library from an Xcode build phase. On macOS with Xcode installed, the Flutter build invokes `flutter_client/tool/ios_build_rust_core.sh` automatically:
+
+```bash
+cd flutter_client
+flutter build ios --simulator --debug
+```
+
+For a signed development build on a physical iPhone, open `flutter_client/ios/Runner.xcworkspace` in Xcode, configure your bundle identifier/development team, and run the `Runner` scheme on the device.
 
 ## Android build
 

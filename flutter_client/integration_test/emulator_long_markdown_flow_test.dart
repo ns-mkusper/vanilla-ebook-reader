@@ -34,9 +34,13 @@ void main() {
     expect(importedText, contains('See you at the end'));
 
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
+    const expectedVoiceLabel = String.fromEnvironment(
+      'JRI_EXPECTED_LONG_DOC_VOICE_LABEL',
+      defaultValue: 'Android Default Voice',
+    );
     expect(
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
-      'Android Default Voice',
+      expectedVoiceLabel,
     );
     // Keep the long-document guard focused on import/playback proof. The
     // speed slider has its own widget coverage; dragging it here can be flaky

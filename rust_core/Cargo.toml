@@ -8,7 +8,7 @@ repository = "https://github.com/ns-mkusper/just-read-it"
 
 [lib]
 name = "rust_core"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]

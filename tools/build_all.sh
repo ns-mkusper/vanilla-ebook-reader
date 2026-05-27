@@ -85,7 +85,7 @@ Options:
 Steps:
   rust         Build the Rust core for the host machine
   android      Cross-compile Rust core with cargo-ndk
-  ios          Produce universal static library with cargo lipo
+  ios          Build Rust core for iOS simulator/device targets
   flutter      Run flutter build apk --debug (requires Android SDK)
   codegen      Execute flutter_rust_bridge_codegen
   all          Execute rust + codegen + flutter (default)
@@ -203,8 +203,14 @@ copy_cxx_shared() {
 }
 
 build_ios() {
-  echo "[build] Building iOS universal library"
-  (cd "$RUST_DIR" && cargo lipo --release --features "$RUST_FEATURES")
+  local ios_features="${IOS_RUST_FEATURES:-bridge,flite}"
+  echo "[build] Building iOS Rust static libraries with features ${ios_features}"
+  local -a targets=("aarch64-apple-ios" "aarch64-apple-ios-sim")
+  for target in "${targets[@]}"; do
+    echo "[build] -> target ${target}"
+    rustup target add "$target" >/dev/null
+    (cd "$RUST_DIR" && cargo build --target "$target" --release --no-default-features --features "$ios_features")
+  done
 }
 
 build_flutter() {
