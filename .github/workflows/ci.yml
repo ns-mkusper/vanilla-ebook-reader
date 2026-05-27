@@ -83,6 +83,7 @@ jobs:
 
   ios-simulator-screenshots:
     runs-on: macos-latest
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: flutter_client
@@ -99,8 +100,6 @@ jobs:
           python-version: '3.11'
       - name: Flutter pub get
         run: flutter pub get
-      - name: Build iOS simulator app with Rust Flite
-        run: flutter build ios --simulator --debug
       - name: Run full iOS simulator UI flow
         run: bash tool/ios_screenshots.sh
       - name: Upload iOS simulator artifacts
