@@ -29,7 +29,7 @@ The release workflow is intentionally gated by CI rather than running directly o
 
 Each alpha release publishes:
 
-- an Android ARM64 APK;
+- an Android ARM64 debug APK;
 - a SHA256 checksum file;
 - release notes containing the release commit SHA, source CI run, artifact metadata, and a changelog.
 
@@ -43,7 +43,7 @@ If an alpha tag already points at the release commit, the workflow exits without
 
 ## Future production work
 
-Alpha releases currently prioritize traceability and installable artifacts. Production release hardening should add:
+Alpha releases currently prioritize traceability and installable debug artifacts. Production release hardening should add:
 
 - real Android signing credentials;
 - Android App Bundle generation for Play Store distribution;

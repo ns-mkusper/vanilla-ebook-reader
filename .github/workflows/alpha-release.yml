@@ -109,7 +109,7 @@ jobs:
         working-directory: flutter_client
         run: |
           flutter build apk \
-            --release \
+            --debug \
             --target-platform android-arm64 \
             --build-name "${{ steps.version.outputs.version }}" \
             --build-number "${{ steps.version.outputs.build_number }}"
@@ -123,7 +123,7 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           APK="just-read-it-${TAG}-android-arm64.apk"
           SHA_FILE="${APK}.sha256"
-          cp flutter_client/build/app/outputs/flutter-apk/app-release.apk "$APK"
+          cp flutter_client/build/app/outputs/flutter-apk/app-debug.apk "$APK"
           sha256sum "$APK" > "$SHA_FILE"
           {
             echo "apk=$APK"
@@ -149,7 +149,7 @@ jobs:
           - Android artifact: \`${{ steps.package.outputs.apk }}\`
           - SHA256: \`${{ steps.package.outputs.sha256 }}\`
 
-          This is an alpha-channel APK intended for testing and validation. It is not yet a signed production release.
+          This is an alpha-channel debug APK intended for testing and validation. It is not yet a signed production release.
 
           ## Changelog
           EOF
