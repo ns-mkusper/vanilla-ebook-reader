@@ -83,7 +83,7 @@ jobs:
 
   ios-simulator-screenshots:
     runs-on: macos-latest
-    timeout-minutes: 40
+    timeout-minutes: 75
     defaults:
       run:
         working-directory: flutter_client

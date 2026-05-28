@@ -52,36 +52,22 @@ DEVICE_ID="${IOS_DEVICE_ID:-$(resolve_simulator)}"
 xcrun simctl boot "$DEVICE_ID" >/dev/null 2>&1 || true
 xcrun simctl bootstatus "$DEVICE_ID" -b
 
-flutter build ios \
-  --simulator \
-  --debug \
+flutter drive \
+  --driver=test_driver/integration_test.dart \
   --target=integration_test/emulator_flow_test.dart \
+  -d "$DEVICE_ID" \
   --dart-define=JRI_EXPORT_TTS_WAV=true \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
   2>&1 | tee build/screenshots/flutter-run.log
 
 flutter drive \
-  --no-build \
   --driver=test_driver/integration_test.dart \
-  --target=integration_test/emulator_flow_test.dart \
-  -d "$DEVICE_ID" \
-  2>&1 | tee -a build/screenshots/flutter-run.log
-
-flutter build ios \
-  --simulator \
-  --debug \
   --target=integration_test/emulator_long_markdown_flow_test.dart \
+  -d "$DEVICE_ID" \
   --dart-define=JRI_EXPORT_TTS_WAV=true \
   --dart-define=JRI_DEFAULT_VOICE_ID=flite-classic \
   --dart-define=JRI_EXPECTED_LONG_DOC_VOICE_LABEL='Motorola Male (Flite)' \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
-  2>&1 | tee -a build/screenshots/flutter-run.log
-
-flutter drive \
-  --no-build \
-  --driver=test_driver/integration_test.dart \
-  --target=integration_test/emulator_long_markdown_flow_test.dart \
-  -d "$DEVICE_ID" \
   2>&1 | tee -a build/screenshots/flutter-run.log
 
 if ! grep -q "JRI_LONG_DOC_FULL_TEXT_PLAYBACK_VALIDATED" build/screenshots/flutter-run.log; then
