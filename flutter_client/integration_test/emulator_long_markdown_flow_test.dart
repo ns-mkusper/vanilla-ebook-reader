@@ -18,8 +18,14 @@ void main() {
       (tester) async {
     final tempDir = await getTemporaryDirectory();
     final longMarkdownFile = File('${tempDir.path}/long_markdown_fixture.md');
+    const fixtureRepeats = int.fromEnvironment(
+      'JRI_LONG_DOC_FIXTURE_REPEATS',
+      defaultValue: 1,
+    );
+    final fixtureText =
+        await rootBundle.loadString('test/fixtures/long_markdown_fixture.md');
     await longMarkdownFile.writeAsString(
-      await rootBundle.loadString('test/fixtures/long_markdown_fixture.md'),
+      List.filled(fixtureRepeats.clamp(1, 4), fixtureText).join('\n\n'),
       flush: true,
     );
 
