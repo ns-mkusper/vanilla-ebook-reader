@@ -60,6 +60,9 @@ flutter drive \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
   2>&1 | tee build/screenshots/flutter-run.log
 
+xcrun simctl terminate "$DEVICE_ID" com.example.justReadIt || true
+xcrun simctl uninstall "$DEVICE_ID" com.example.justReadIt || true
+
 flutter drive \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/emulator_long_markdown_flow_test.dart \
