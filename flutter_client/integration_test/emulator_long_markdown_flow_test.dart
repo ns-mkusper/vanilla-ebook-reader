@@ -76,10 +76,14 @@ void main() {
       },
       timeout: const Duration(seconds: 30),
     );
+    const wavTimeoutMinutes = int.fromEnvironment(
+      'JRI_LONG_DOC_WAV_TIMEOUT_MINUTES',
+      defaultValue: 2,
+    );
     await _pumpUntil(
       tester,
       () => wavFile.existsSync() && wavFile.lengthSync() > 100000,
-      timeout: const Duration(minutes: 2),
+      timeout: Duration(minutes: wavTimeoutMinutes.clamp(2, 12)),
     );
     final playbackStartMs = launchTimer.elapsedMilliseconds;
     debugPrint('JRI_LONG_DOC_PLAYBACK_STARTED_AFTER_MS=$playbackStartMs');

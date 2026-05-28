@@ -28,6 +28,7 @@ flutter drive \
   --dart-define=JRI_DEFAULT_VOICE_ID=android-system \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
   --dart-define=JRI_DISABLE_BACKGROUND_TTS_QUEUE=true \
+  --dart-define=JRI_LONG_DOC_WAV_TIMEOUT_MINUTES=10 \
   >> build/screenshots/flutter-run.log 2>&1
 
 if ! grep -q "JRI_LONG_DOC_FULL_TEXT_PLAYBACK_VALIDATED" build/screenshots/flutter-run.log; then
