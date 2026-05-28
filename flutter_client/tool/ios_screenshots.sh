@@ -60,7 +60,7 @@ flutter build ios \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
   2>&1 | tee build/screenshots/flutter-run.log
 
-timeout 15m flutter drive \
+flutter drive \
   --no-build \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/emulator_flow_test.dart \
@@ -77,7 +77,7 @@ flutter build ios \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
   2>&1 | tee -a build/screenshots/flutter-run.log
 
-timeout 20m flutter drive \
+flutter drive \
   --no-build \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/emulator_long_markdown_flow_test.dart \
