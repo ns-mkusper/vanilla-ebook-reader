@@ -176,6 +176,12 @@ jobs:
                   '<application android:usesCleartextTraffic="true"',
                   1,
               )
+          if 'android:importantForAutofill=' not in text:
+              text = text.replace(
+                  '<activity\n            android:name=".MainActivity"',
+                  '<activity\n            android:importantForAutofill="noExcludeDescendants"\n            android:name=".MainActivity"',
+                  1,
+              )
           service_block = '''
                   <service
                       android:name="com.ryanheise.audioservice.AudioService"
