@@ -3,12 +3,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 
 final audioHandlerProvider = Provider<Future<TtsAudioHandler>>((ref) async {
+  final session = await AudioSession.instance;
+  await session.configure(const AudioSessionConfiguration.speech());
   return AudioService.init(
     builder: () => TtsAudioHandler(),
     config: const AudioServiceConfig(
@@ -195,6 +198,7 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> play() async {
+    debugPrint('JRI_AUDIO_HANDLER_PLAY_REQUEST');
     if (_player.processingState == ProcessingState.completed) {
       await _player.seek(Duration.zero);
     }
@@ -202,7 +206,10 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() {
+    debugPrint('JRI_AUDIO_HANDLER_PAUSE_REQUEST');
+    return _player.pause();
+  }
 
   @override
   Future<void> stop() async {

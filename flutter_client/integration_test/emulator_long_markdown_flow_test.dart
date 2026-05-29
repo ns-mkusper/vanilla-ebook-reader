@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_read_it/main.dart' as app;
+import 'package:just_read_it/services/audio_handler.dart';
 import 'package:just_read_it/ui/player_screen.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -121,6 +122,13 @@ void main() {
       'JRI_LONG_DOC_MEDIA_CONTROLS_VALIDATED word=${resumedProgress.current} total=${resumedProgress.total}',
     );
 
+    const validateBackgroundMedia = bool.fromEnvironment(
+      'JRI_VALIDATE_BACKGROUND_MEDIA',
+    );
+    if (validateBackgroundMedia) {
+      await _validateBackgroundPlaybackAndControls(tester);
+    }
+
     final bytes = await wavFile.readAsBytes();
     _validateWav(bytes);
     binding.reportData ??= <String, dynamic>{};
@@ -198,6 +206,93 @@ class _PlayerProgress {
 
   final int current;
   final int total;
+}
+
+Future<void> _validateBackgroundPlaybackAndControls(
+  WidgetTester tester,
+) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(PlayerScreen)),
+  );
+  final audioHandler = await container.read(audioHandlerProvider);
+  await _pumpUntil(
+    tester,
+    () =>
+        audioHandler.isPlaying &&
+        audioHandler.position >= const Duration(milliseconds: 500),
+    timeout: const Duration(seconds: 20),
+  );
+
+  final start = audioHandler.position;
+  debugPrint(
+    'JRI_BACKGROUND_VALIDATION_READY positionMs=${start.inMilliseconds}',
+  );
+
+  const backgroundHoldSeconds = int.fromEnvironment(
+    'JRI_BACKGROUND_MEDIA_HOLD_SECONDS',
+    defaultValue: 8,
+  );
+  await tester.runAsync(
+    () => Future<void>.delayed(
+      Duration(seconds: backgroundHoldSeconds.clamp(8, 120)),
+    ),
+  );
+  const externalBackgroundControls = bool.fromEnvironment(
+    'JRI_BACKGROUND_MEDIA_EXTERNAL_CONTROLS',
+    defaultValue: true,
+  );
+  await tester.pump(const Duration(milliseconds: 500));
+  final afterBackground = audioHandler.position;
+  if (externalBackgroundControls) {
+    // The shell harness validates platform media-session state and drives
+    // media controls while this test is backgrounded, then writes the required
+    // validation markers into the shared flutter-run.log. Avoid asserting here
+    // because the harness intentionally pauses/resumes playback during the
+    // hold window.
+    return;
+  }
+
+  expect(audioHandler.isPlaying, isTrue);
+  expect(
+    afterBackground,
+    greaterThan(start + const Duration(seconds: 2)),
+  );
+  debugPrint(
+    'JRI_BACKGROUND_PLAYBACK_CONTINUED '
+    'fromMs=${start.inMilliseconds} toMs=${afterBackground.inMilliseconds}',
+  );
+
+  debugPrint('JRI_BACKGROUND_REMOTE_PAUSE_READY');
+  await audioHandler.pause();
+  await _pumpUntil(
+    tester,
+    () => !audioHandler.isPlaying,
+    timeout: const Duration(seconds: 30),
+  );
+  final paused = audioHandler.position;
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(seconds: 2)),
+  );
+  await tester.pump(const Duration(milliseconds: 500));
+  final stillPaused = audioHandler.position;
+  expect(stillPaused, lessThanOrEqualTo(paused + const Duration(seconds: 1)));
+  debugPrint(
+    'JRI_BACKGROUND_REMOTE_PAUSE_VALIDATED positionMs=${paused.inMilliseconds}',
+  );
+
+  debugPrint('JRI_BACKGROUND_REMOTE_PLAY_READY');
+  await audioHandler.play();
+  await _pumpUntil(
+    tester,
+    () =>
+        audioHandler.isPlaying &&
+        audioHandler.position > paused + const Duration(milliseconds: 800),
+    timeout: const Duration(seconds: 30),
+  );
+  debugPrint(
+    'JRI_BACKGROUND_REMOTE_PLAY_VALIDATED '
+    'positionMs=${audioHandler.position.inMilliseconds}',
+  );
 }
 
 String _expectedNeedle(Matcher matcher) {

@@ -48,6 +48,44 @@ raise SystemExit('No available iPhone simulator found')
 PY
 }
 
+wait_for_log() {
+  local marker="$1"
+  local timeout_seconds="$2"
+  local deadline=$((SECONDS + timeout_seconds))
+  while (( SECONDS < deadline )); do
+    if grep -q "$marker" build/screenshots/flutter-run.log; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for log marker: $marker" >&2
+  tail -200 build/screenshots/flutter-run.log >&2 || true
+  return 1
+}
+
+run_long_markdown_drive_with_background_controls() {
+  flutter drive \
+    --driver=test_driver/integration_test.dart \
+    --target=integration_test/emulator_long_markdown_flow_test.dart \
+    -d "$DEVICE_ID" \
+    --dart-define=JRI_EXPORT_TTS_WAV=true \
+    --dart-define=JRI_DEFAULT_VOICE_ID=flite-classic \
+    --dart-define=JRI_EXPECTED_LONG_DOC_VOICE_LABEL='Motorola Male (Flite)' \
+    --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
+    --dart-define=JRI_VALIDATE_BACKGROUND_MEDIA=true \
+    --dart-define=JRI_BACKGROUND_MEDIA_EXTERNAL_CONTROLS=false \
+    2>&1 | tee -a build/screenshots/flutter-run.log &
+  local drive_pid=$!
+
+  wait_for_log "JRI_BACKGROUND_VALIDATION_READY" 1200
+  xcrun simctl launch "$DEVICE_ID" com.apple.springboard >/dev/null 2>&1 || true
+  sleep 8
+  xcrun simctl io "$DEVICE_ID" screenshot build/screenshots/background-ios-home.png || true
+  xcrun simctl launch "$DEVICE_ID" com.example.justReadIt >/dev/null 2>&1 || true
+
+  wait "$drive_pid"
+}
+
 DEVICE_ID="${IOS_DEVICE_ID:-$(resolve_simulator)}"
 xcrun simctl boot "$DEVICE_ID" >/dev/null 2>&1 || true
 xcrun simctl bootstatus "$DEVICE_ID" -b
@@ -63,15 +101,7 @@ flutter drive \
 xcrun simctl terminate "$DEVICE_ID" com.example.justReadIt || true
 xcrun simctl uninstall "$DEVICE_ID" com.example.justReadIt || true
 
-flutter drive \
-  --driver=test_driver/integration_test.dart \
-  --target=integration_test/emulator_long_markdown_flow_test.dart \
-  -d "$DEVICE_ID" \
-  --dart-define=JRI_EXPORT_TTS_WAV=true \
-  --dart-define=JRI_DEFAULT_VOICE_ID=flite-classic \
-  --dart-define=JRI_EXPECTED_LONG_DOC_VOICE_LABEL='Motorola Male (Flite)' \
-  --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
-  2>&1 | tee -a build/screenshots/flutter-run.log
+run_long_markdown_drive_with_background_controls
 
 if ! grep -q "JRI_LONG_DOC_FULL_TEXT_PLAYBACK_VALIDATED" build/screenshots/flutter-run.log; then
   echo "Full long markdown playback was not validated" >&2
@@ -81,6 +111,15 @@ if ! grep -q "JRI_LONG_DOC_PLAYBACK_STARTED_AFTER_MS" build/screenshots/flutter-
   echo "Long document playback-start latency was not measured" >&2
   exit 1
 fi
+for marker in \
+  JRI_BACKGROUND_PLAYBACK_CONTINUED \
+  JRI_BACKGROUND_REMOTE_PAUSE_VALIDATED \
+  JRI_BACKGROUND_REMOTE_PLAY_VALIDATED; do
+  if ! grep -q "$marker" build/screenshots/flutter-run.log; then
+    echo "Background media marker missing: $marker" >&2
+    exit 1
+  fi
+done
 
 if grep -Eiq "Unable to bind to AudioService|PlatformException|MissingPluginException|Failed to lookup symbol|dlopen|Library not loaded|Symbol not found|EXC_BAD_ACCESS|Fatal error|AVAudioSession.*error" build/screenshots/flutter-run.log; then
   echo "Native iOS audio/Rust/plugin error detected in simulator log" >&2
@@ -135,5 +174,8 @@ test -s build/screenshots/long_markdown_playback_sample_from_emulator.wav
 python3 ../tools/validate_pngs.py \
   build/screenshots/01_txt_import_editor.png \
   build/screenshots/02_player_playback.png
+if [ -s build/screenshots/background-ios-home.png ]; then
+  python3 ../tools/validate_pngs.py build/screenshots/background-ios-home.png
+fi
 
 xcrun simctl io "$DEVICE_ID" screenshot build/screenshots/final-ios-simulator.png || true

@@ -12,6 +12,111 @@ done
 adb -s emulator-5554 shell pm list packages >/dev/null
 sleep 10
 
+wait_for_log() {
+  local marker="$1"
+  local timeout_seconds="$2"
+  local deadline=$((SECONDS + timeout_seconds))
+  while (( SECONDS < deadline )); do
+    if grep -q "$marker" build/screenshots/flutter-run.log; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for log marker: $marker" >&2
+  tail -200 build/screenshots/flutter-run.log >&2 || true
+  return 1
+}
+
+log_count() {
+  local marker="$1"
+  grep -c "$marker" build/screenshots/flutter-run.log || true
+}
+
+wait_for_log_count_greater() {
+  local marker="$1"
+  local previous_count="$2"
+  local timeout_seconds="$3"
+  local deadline=$((SECONDS + timeout_seconds))
+  while (( SECONDS < deadline )); do
+    if (( $(log_count "$marker") > previous_count )); then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for new log marker: $marker" >&2
+  tail -200 build/screenshots/flutter-run.log >&2 || true
+  return 1
+}
+
+send_android_media_key() {
+  local key="$1"
+  adb -s emulator-5554 shell input keyevent "$key" || true
+}
+
+capture_android_media_sessions() {
+  local path="$1"
+  adb -s emulator-5554 shell dumpsys media_session > "$path" || true
+  if ! grep -q "com.example.just_read_it" "$path"; then
+    echo "Just Read It media session missing from $path" >&2
+    cat "$path" >&2 || true
+    return 1
+  fi
+}
+
+assert_android_playback_state() {
+  local path="$1"
+  local expected="$2"
+  if ! grep -Eq "state=PlaybackState.*state=$expected" "$path"; then
+    echo "Expected Android media session playback state=$expected in $path" >&2
+    cat "$path" >&2 || true
+    return 1
+  fi
+}
+
+run_long_markdown_drive_with_background_controls() {
+  flutter drive \
+    --driver=test_driver/integration_test.dart \
+    --target=integration_test/emulator_long_markdown_flow_test.dart \
+    -d emulator-5554 \
+    --dart-define=JRI_EXPORT_TTS_WAV=true \
+    --dart-define=JRI_DEFAULT_VOICE_ID=android-system \
+    --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
+    --dart-define=JRI_DISABLE_BACKGROUND_TTS_QUEUE=true \
+    --dart-define=JRI_LONG_DOC_WAV_TIMEOUT_MINUTES=10 \
+    --dart-define=JRI_VALIDATE_BACKGROUND_MEDIA=true \
+    --dart-define=JRI_BACKGROUND_MEDIA_HOLD_SECONDS=90 \
+    >> build/screenshots/flutter-run.log 2>&1 &
+  local drive_pid=$!
+
+  wait_for_log "JRI_BACKGROUND_VALIDATION_READY" 600
+  adb -s emulator-5554 shell input keyevent KEYCODE_HOME
+  sleep 5
+  adb -s emulator-5554 exec-out screencap -p > build/screenshots/background-android-home.png || true
+  capture_android_media_sessions build/screenshots/background-android-playing.txt
+  assert_android_playback_state build/screenshots/background-android-playing.txt 3
+  echo "JRI_BACKGROUND_PLAYBACK_CONTINUED source=android-media-session" >> build/screenshots/flutter-run.log
+
+  local pause_count
+  pause_count=$(log_count JRI_AUDIO_HANDLER_PAUSE_REQUEST)
+  send_android_media_key KEYCODE_MEDIA_PAUSE
+  wait_for_log_count_greater JRI_AUDIO_HANDLER_PAUSE_REQUEST "$pause_count" 60
+  capture_android_media_sessions build/screenshots/background-android-paused.txt
+  assert_android_playback_state build/screenshots/background-android-paused.txt 2
+  echo "JRI_BACKGROUND_REMOTE_PAUSE_VALIDATED source=android-media-session" >> build/screenshots/flutter-run.log
+
+  local play_count
+  play_count=$(log_count JRI_AUDIO_HANDLER_PLAY_REQUEST)
+  send_android_media_key KEYCODE_MEDIA_PLAY
+  wait_for_log_count_greater JRI_AUDIO_HANDLER_PLAY_REQUEST "$play_count" 60
+  capture_android_media_sessions build/screenshots/background-android-resumed.txt
+  assert_android_playback_state build/screenshots/background-android-resumed.txt 3
+  echo "JRI_BACKGROUND_REMOTE_PLAY_VALIDATED source=android-media-session" >> build/screenshots/flutter-run.log
+
+  adb -s emulator-5554 shell monkey -p com.example.just_read_it -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+
+  wait "$drive_pid"
+}
+
 flutter drive \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/emulator_flow_test.dart \
@@ -20,16 +125,7 @@ flutter drive \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
   > build/screenshots/flutter-run.log 2>&1
 
-flutter drive \
-  --driver=test_driver/integration_test.dart \
-  --target=integration_test/emulator_long_markdown_flow_test.dart \
-  -d emulator-5554 \
-  --dart-define=JRI_EXPORT_TTS_WAV=true \
-  --dart-define=JRI_DEFAULT_VOICE_ID=android-system \
-  --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
-  --dart-define=JRI_DISABLE_BACKGROUND_TTS_QUEUE=true \
-  --dart-define=JRI_LONG_DOC_WAV_TIMEOUT_MINUTES=10 \
-  >> build/screenshots/flutter-run.log 2>&1
+run_long_markdown_drive_with_background_controls
 
 if ! grep -q "JRI_LONG_DOC_FULL_TEXT_PLAYBACK_VALIDATED" build/screenshots/flutter-run.log; then
   echo "Full long markdown playback was not validated" >&2
@@ -39,6 +135,15 @@ if ! grep -q "JRI_LONG_DOC_PLAYBACK_STARTED_AFTER_MS" build/screenshots/flutter-
   echo "Long document playback-start latency was not measured" >&2
   exit 1
 fi
+for marker in \
+  JRI_BACKGROUND_PLAYBACK_CONTINUED \
+  JRI_BACKGROUND_REMOTE_PAUSE_VALIDATED \
+  JRI_BACKGROUND_REMOTE_PLAY_VALIDATED; do
+  if ! grep -q "$marker" build/screenshots/flutter-run.log; then
+    echo "Background media marker missing: $marker" >&2
+    exit 1
+  fi
+done
 
 if grep -Eq "Unable to bind to AudioService|PlatformException|MissingPluginException" build/screenshots/flutter-run.log; then
   echo "Native audio playback error detected in emulator log" >&2
@@ -90,3 +195,6 @@ test -s build/screenshots/long_markdown_playback_sample_from_emulator.wav
 python3 ../tools/validate_pngs.py \
   build/screenshots/01_txt_import_editor.png \
   build/screenshots/02_player_playback.png
+if [ -s build/screenshots/background-android-home.png ]; then
+  python3 ../tools/validate_pngs.py build/screenshots/background-android-home.png
+fi

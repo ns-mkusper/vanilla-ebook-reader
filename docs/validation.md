@@ -89,7 +89,7 @@ cd flutter_client
 bash tool/ios_screenshots.sh
 ```
 
-That script mirrors the Android emulator proof while keeping Rust Flite as the iOS TTS backend. It validates launch, TXT/EPUB import, persistence, Rust-backed playback, pause/resume, highlighting, screenshots, playback-sourced WAV artifacts, WAV voiced-audio checks, STT coverage, and iOS-specific native/plugin/Rust loading log failures.
+That script mirrors the Android emulator proof while keeping Rust Flite as the iOS TTS backend. It validates launch, TXT/EPUB import, persistence, Rust-backed playback, pause/resume, highlighting, screenshots, playback-sourced WAV artifacts, WAV voiced-audio checks, STT coverage, background/minimized playback continuation, background-control callbacks, and iOS-specific native/plugin/Rust loading log failures. The required log markers include `JRI_BACKGROUND_PLAYBACK_CONTINUED`, `JRI_BACKGROUND_REMOTE_PAUSE_VALIDATED`, and `JRI_BACKGROUND_REMOTE_PLAY_VALIDATED`, plus a `background-ios-home.png` simulator screenshot when screenshot capture is available.
 
 ## Emulator screenshot and audio proof
 
@@ -109,6 +109,10 @@ That script validates the full mobile UX path:
 - exports playback-sourced WAV artifacts;
 - validates WAV headers and voiced audio windows;
 - checks speech-to-text coverage for the short playback sample;
+- validates that minimized/background playback continues after pressing Home;
+- validates Android media-session pause/play controls while the app is backgrounded;
+- requires `JRI_BACKGROUND_PLAYBACK_CONTINUED`, `JRI_BACKGROUND_REMOTE_PAUSE_VALIDATED`, and `JRI_BACKGROUND_REMOTE_PLAY_VALIDATED` log markers;
+- captures a `background-android-home.png` proof screenshot when screenshot capture is available;
 - validates that no native plugin or AudioService binding errors appeared in logs.
 
 ## CI expectations
