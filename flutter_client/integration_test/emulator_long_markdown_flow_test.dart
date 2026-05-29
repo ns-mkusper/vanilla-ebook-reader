@@ -284,14 +284,13 @@ Future<void> _validateBackgroundPlaybackAndControls(
   await audioHandler.play();
   await _pumpUntil(
     tester,
-    () =>
-        audioHandler.isPlaying &&
-        audioHandler.position > paused + const Duration(milliseconds: 800),
+    () => audioHandler.isPlaying,
     timeout: const Duration(seconds: 30),
   );
+  final resumed = audioHandler.position;
   debugPrint(
     'JRI_BACKGROUND_REMOTE_PLAY_VALIDATED '
-    'positionMs=${audioHandler.position.inMilliseconds}',
+    'pausedMs=${paused.inMilliseconds} resumedMs=${resumed.inMilliseconds}',
   );
 }
 

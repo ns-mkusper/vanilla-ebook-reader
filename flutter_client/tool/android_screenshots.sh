@@ -27,26 +27,6 @@ wait_for_log() {
   return 1
 }
 
-log_count() {
-  local marker="$1"
-  grep -c "$marker" build/screenshots/flutter-run.log || true
-}
-
-wait_for_log_count_greater() {
-  local marker="$1"
-  local previous_count="$2"
-  local timeout_seconds="$3"
-  local deadline=$((SECONDS + timeout_seconds))
-  while (( SECONDS < deadline )); do
-    if (( $(log_count "$marker") > previous_count )); then
-      return 0
-    fi
-    sleep 1
-  done
-  echo "Timed out waiting for new log marker: $marker" >&2
-  tail -200 build/screenshots/flutter-run.log >&2 || true
-  return 1
-}
 
 send_android_media_key() {
   local key="$1"
@@ -73,6 +53,22 @@ assert_android_playback_state() {
   fi
 }
 
+wait_for_android_playback_state() {
+  local path="$1"
+  local expected="$2"
+  local timeout_seconds="$3"
+  local deadline=$((SECONDS + timeout_seconds))
+  while (( SECONDS < deadline )); do
+    if capture_android_media_sessions "$path" && assert_android_playback_state "$path" "$expected"; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Timed out waiting for Android media session playback state=$expected" >&2
+  capture_android_media_sessions "$path" || true
+  assert_android_playback_state "$path" "$expected"
+}
+
 run_long_markdown_drive_with_background_controls() {
   flutter drive \
     --driver=test_driver/integration_test.dart \
@@ -84,7 +80,7 @@ run_long_markdown_drive_with_background_controls() {
     --dart-define=JRI_DISABLE_BACKGROUND_TTS_QUEUE=true \
     --dart-define=JRI_LONG_DOC_WAV_TIMEOUT_MINUTES=10 \
     --dart-define=JRI_VALIDATE_BACKGROUND_MEDIA=true \
-    --dart-define=JRI_BACKGROUND_MEDIA_HOLD_SECONDS=90 \
+    --dart-define=JRI_BACKGROUND_MEDIA_HOLD_SECONDS=120 \
     >> build/screenshots/flutter-run.log 2>&1 &
   local drive_pid=$!
 
@@ -96,20 +92,12 @@ run_long_markdown_drive_with_background_controls() {
   assert_android_playback_state build/screenshots/background-android-playing.txt 3
   echo "JRI_BACKGROUND_PLAYBACK_CONTINUED source=android-media-session" >> build/screenshots/flutter-run.log
 
-  local pause_count
-  pause_count=$(log_count JRI_AUDIO_HANDLER_PAUSE_REQUEST)
   send_android_media_key KEYCODE_MEDIA_PAUSE
-  wait_for_log_count_greater JRI_AUDIO_HANDLER_PAUSE_REQUEST "$pause_count" 60
-  capture_android_media_sessions build/screenshots/background-android-paused.txt
-  assert_android_playback_state build/screenshots/background-android-paused.txt 2
+  wait_for_android_playback_state build/screenshots/background-android-paused.txt 2 75
   echo "JRI_BACKGROUND_REMOTE_PAUSE_VALIDATED source=android-media-session" >> build/screenshots/flutter-run.log
 
-  local play_count
-  play_count=$(log_count JRI_AUDIO_HANDLER_PLAY_REQUEST)
   send_android_media_key KEYCODE_MEDIA_PLAY
-  wait_for_log_count_greater JRI_AUDIO_HANDLER_PLAY_REQUEST "$play_count" 60
-  capture_android_media_sessions build/screenshots/background-android-resumed.txt
-  assert_android_playback_state build/screenshots/background-android-resumed.txt 3
+  wait_for_android_playback_state build/screenshots/background-android-resumed.txt 3 75
   echo "JRI_BACKGROUND_REMOTE_PLAY_VALIDATED source=android-media-session" >> build/screenshots/flutter-run.log
 
   adb -s emulator-5554 shell monkey -p com.example.just_read_it -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
