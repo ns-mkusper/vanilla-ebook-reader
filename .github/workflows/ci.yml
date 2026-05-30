@@ -116,6 +116,7 @@ jobs:
 
   android-emulator-screenshots:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: flutter_client

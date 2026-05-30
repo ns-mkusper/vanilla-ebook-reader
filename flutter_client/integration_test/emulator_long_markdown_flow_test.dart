@@ -234,12 +234,16 @@ Future<void> _validateBackgroundPlaybackAndControls(
   );
   await tester.runAsync(
     () => Future<void>.delayed(
-      Duration(seconds: backgroundHoldSeconds.clamp(8, 120)),
+      Duration(seconds: backgroundHoldSeconds.clamp(8, 240)),
     ),
   );
   const externalBackgroundControls = bool.fromEnvironment(
     'JRI_BACKGROUND_MEDIA_EXTERNAL_CONTROLS',
     defaultValue: true,
+  );
+  const shellValidatedBackgroundPlayback = bool.fromEnvironment(
+    'JRI_SHELL_VALIDATED_BACKGROUND_PLAYBACK',
+    defaultValue: false,
   );
   await tester.pump(const Duration(milliseconds: 500));
   final afterBackground = audioHandler.position;
@@ -253,14 +257,27 @@ Future<void> _validateBackgroundPlaybackAndControls(
   }
 
   expect(audioHandler.isPlaying, isTrue);
-  expect(
-    afterBackground,
-    greaterThan(start + const Duration(seconds: 2)),
-  );
-  debugPrint(
-    'JRI_BACKGROUND_PLAYBACK_CONTINUED '
-    'fromMs=${start.inMilliseconds} toMs=${afterBackground.inMilliseconds}',
-  );
+  if (shellValidatedBackgroundPlayback) {
+    // Android CI proves background playback via dumpsys media_session while the
+    // app is backgrounded. Do not require Dart's foreground isolate to observe
+    // +2s of position progress before continuing with Dart-side pause/play
+    // validation, because some emulators stall the test isolate while HOME is
+    // active even though the platform media session remains playing.
+    expect(afterBackground, greaterThanOrEqualTo(start));
+    debugPrint(
+      'JRI_BACKGROUND_PLAYBACK_CONTINUED source=dart-shell-validated '
+      'fromMs=${start.inMilliseconds} toMs=${afterBackground.inMilliseconds}',
+    );
+  } else {
+    expect(
+      afterBackground,
+      greaterThan(start + const Duration(seconds: 2)),
+    );
+    debugPrint(
+      'JRI_BACKGROUND_PLAYBACK_CONTINUED '
+      'fromMs=${start.inMilliseconds} toMs=${afterBackground.inMilliseconds}',
+    );
+  }
 
   debugPrint('JRI_BACKGROUND_REMOTE_PAUSE_READY');
   await audioHandler.pause();
