@@ -31,6 +31,10 @@ Future<void> _initializeTtsBridgeImpl() async {
 }
 
 ExternalLibrary _resolveExternalLibrary() {
+  if (Platform.isIOS) {
+    return ExternalLibrary.process(iKnowHowToUseIt: true);
+  }
+
   final name = _libraryFileName();
   final workspaceLib = File('${Directory.current.path}/target/debug/$name');
   if (workspaceLib.existsSync()) {
@@ -44,7 +48,10 @@ String _libraryFileName() {
     return 'librust_core.so';
   }
   if (Platform.isIOS) {
-    return 'rust_core.framework/rust_core';
+    // The iOS Xcode target statically links librust_core.a from the
+    // Build Rust Core phase. Static iOS FFI symbols are resolved from the
+    // process image instead of a dlopen-able framework.
+    return '';
   }
   if (Platform.isMacOS) {
     return 'librust_core.dylib';

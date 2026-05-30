@@ -2,15 +2,51 @@
 set -euxo pipefail
 
 mkdir -p build/screenshots
-adb -s emulator-5554 wait-for-device
-for attempt in {1..90}; do
-  if adb -s emulator-5554 shell pm list packages >/dev/null 2>&1; then
-    break
-  fi
-  sleep 2
-done
-adb -s emulator-5554 shell pm list packages >/dev/null
-sleep 10
+: > build/screenshots/flutter-run.log
+
+if ! command -v xcrun >/dev/null 2>&1; then
+  echo "xcrun is required for iOS simulator validation" >&2
+  exit 1
+fi
+
+resolve_simulator() {
+  python3 - <<'PY'
+import json
+import subprocess
+import sys
+
+preferred = [
+    'iPhone 16',
+    'iPhone 15',
+    'iPhone 14',
+    'iPhone 13',
+]
+raw = subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], text=True)
+devices = json.loads(raw).get('devices', {})
+flat = []
+for runtime, entries in devices.items():
+    if 'iOS' not in runtime:
+        continue
+    for device in entries:
+        if not device.get('isAvailable', True):
+            continue
+        flat.append(device)
+for device in flat:
+    if device.get('state') == 'Booted':
+        print(device['udid'])
+        sys.exit(0)
+for name in preferred:
+    for device in flat:
+        if device.get('name') == name:
+            print(device['udid'])
+            sys.exit(0)
+for device in flat:
+    if device.get('name', '').startswith('iPhone'):
+        print(device['udid'])
+        sys.exit(0)
+raise SystemExit('No available iPhone simulator found')
+PY
+}
 
 wait_for_log() {
   local marker="$1"
@@ -27,91 +63,43 @@ wait_for_log() {
   return 1
 }
 
-
-send_android_media_key() {
-  local key="$1"
-  adb -s emulator-5554 shell input keyevent "$key" || true
-}
-
-capture_android_media_sessions() {
-  local path="$1"
-  adb -s emulator-5554 shell dumpsys media_session > "$path" || true
-  if ! grep -q "com.example.just_read_it" "$path"; then
-    echo "Just Read It media session missing from $path" >&2
-    cat "$path" >&2 || true
-    return 1
-  fi
-}
-
-assert_android_playback_state() {
-  local path="$1"
-  local expected="$2"
-  if ! grep -Eq "state=PlaybackState.*state=$expected" "$path"; then
-    echo "Expected Android media session playback state=$expected in $path" >&2
-    cat "$path" >&2 || true
-    return 1
-  fi
-}
-
-wait_for_android_playback_state() {
-  local path="$1"
-  local expected="$2"
-  local timeout_seconds="$3"
-  local deadline=$((SECONDS + timeout_seconds))
-  while (( SECONDS < deadline )); do
-    if capture_android_media_sessions "$path" && assert_android_playback_state "$path" "$expected"; then
-      return 0
-    fi
-    sleep 2
-  done
-  echo "Timed out waiting for Android media session playback state=$expected" >&2
-  capture_android_media_sessions "$path" || true
-  assert_android_playback_state "$path" "$expected"
-}
-
 run_long_markdown_drive_with_background_controls() {
   flutter drive \
     --driver=test_driver/integration_test.dart \
     --target=integration_test/emulator_long_markdown_flow_test.dart \
-    -d emulator-5554 \
+    -d "$DEVICE_ID" \
     --dart-define=JRI_EXPORT_TTS_WAV=true \
-    --dart-define=JRI_DEFAULT_VOICE_ID=android-system \
+    --dart-define=JRI_DEFAULT_VOICE_ID=flite-classic \
+    --dart-define=JRI_EXPECTED_LONG_DOC_VOICE_LABEL='Motorola Male (Flite)' \
     --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
-    --dart-define=JRI_DISABLE_BACKGROUND_TTS_QUEUE=true \
-    --dart-define=JRI_LONG_DOC_WAV_TIMEOUT_MINUTES=10 \
     --dart-define=JRI_VALIDATE_BACKGROUND_MEDIA=true \
-    --dart-define=JRI_BACKGROUND_MEDIA_HOLD_SECONDS=120 \
-    >> build/screenshots/flutter-run.log 2>&1 &
+    --dart-define=JRI_BACKGROUND_MEDIA_EXTERNAL_CONTROLS=false \
+    2>&1 | tee -a build/screenshots/flutter-run.log &
   local drive_pid=$!
 
-  wait_for_log "JRI_BACKGROUND_VALIDATION_READY" 600
-  adb -s emulator-5554 shell input keyevent KEYCODE_HOME
-  sleep 5
-  adb -s emulator-5554 exec-out screencap -p > build/screenshots/background-android-home.png || true
-  capture_android_media_sessions build/screenshots/background-android-playing.txt
-  assert_android_playback_state build/screenshots/background-android-playing.txt 3
-  echo "JRI_BACKGROUND_PLAYBACK_CONTINUED source=android-media-session" >> build/screenshots/flutter-run.log
-
-  send_android_media_key KEYCODE_MEDIA_PAUSE
-  wait_for_android_playback_state build/screenshots/background-android-paused.txt 2 75
-  echo "JRI_BACKGROUND_REMOTE_PAUSE_VALIDATED source=android-media-session" >> build/screenshots/flutter-run.log
-
-  send_android_media_key KEYCODE_MEDIA_PLAY
-  wait_for_android_playback_state build/screenshots/background-android-resumed.txt 3 75
-  echo "JRI_BACKGROUND_REMOTE_PLAY_VALIDATED source=android-media-session" >> build/screenshots/flutter-run.log
-
-  adb -s emulator-5554 shell monkey -p com.example.just_read_it -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+  wait_for_log "JRI_BACKGROUND_VALIDATION_READY" 1200
+  xcrun simctl launch "$DEVICE_ID" com.apple.springboard >/dev/null 2>&1 || true
+  sleep 8
+  xcrun simctl io "$DEVICE_ID" screenshot build/screenshots/background-ios-home.png || true
+  xcrun simctl launch "$DEVICE_ID" com.example.justReadIt >/dev/null 2>&1 || true
 
   wait "$drive_pid"
 }
 
+DEVICE_ID="${IOS_DEVICE_ID:-$(resolve_simulator)}"
+xcrun simctl boot "$DEVICE_ID" >/dev/null 2>&1 || true
+xcrun simctl bootstatus "$DEVICE_ID" -b
+
 flutter drive \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/emulator_flow_test.dart \
-  -d emulator-5554 \
+  -d "$DEVICE_ID" \
   --dart-define=JRI_EXPORT_TTS_WAV=true \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
-  > build/screenshots/flutter-run.log 2>&1
+  2>&1 | tee build/screenshots/flutter-run.log
+
+xcrun simctl terminate "$DEVICE_ID" com.example.justReadIt || true
+xcrun simctl uninstall "$DEVICE_ID" com.example.justReadIt || true
 
 run_long_markdown_drive_with_background_controls
 
@@ -133,9 +121,9 @@ for marker in \
   fi
 done
 
-if grep -Eq "Unable to bind to AudioService|PlatformException|MissingPluginException" build/screenshots/flutter-run.log; then
-  echo "Native audio playback error detected in emulator log" >&2
-  grep -En "Unable to bind to AudioService|PlatformException|MissingPluginException" build/screenshots/flutter-run.log >&2
+if grep -Eiq "Unable to bind to AudioService|PlatformException|MissingPluginException|Failed to lookup symbol|dlopen|Library not loaded|Symbol not found|EXC_BAD_ACCESS|Fatal error|AVAudioSession.*error" build/screenshots/flutter-run.log; then
+  echo "Native iOS audio/Rust/plugin error detected in simulator log" >&2
+  grep -Ein "Unable to bind to AudioService|PlatformException|MissingPluginException|Failed to lookup symbol|dlopen|Library not loaded|Symbol not found|EXC_BAD_ACCESS|Fatal error|AVAudioSession.*error" build/screenshots/flutter-run.log >&2
   exit 1
 fi
 
@@ -156,7 +144,10 @@ fi
 python3 ../tools/validate_wav.py build/screenshots/voice_sample_from_emulator.wav
 test -s build/screenshots/long_markdown_playback_sample_from_emulator.wav
 python3 ../tools/validate_wav.py build/screenshots/long_markdown_playback_sample_from_emulator.wav
-python3 -m pip install --user vosk==0.3.45
+VENV_DIR="build/screenshots/venv"
+python3 -m venv "$VENV_DIR"
+"$VENV_DIR/bin/python" -m pip install --upgrade pip
+"$VENV_DIR/bin/python" -m pip install vosk==0.3.44
 MODEL_DIR="build/screenshots/vosk-model-small-en-us-0.15"
 if [ ! -d "$MODEL_DIR" ]; then
   curl -L --retry 3 -o build/screenshots/vosk-model.zip \
@@ -169,12 +160,12 @@ with zipfile.ZipFile(zip_path) as zf:
     zf.extractall('build/screenshots')
 PY
 fi
-python3 ../tools/validate_wav_stt.py \
+"$VENV_DIR/bin/python" ../tools/validate_wav_stt.py \
   build/screenshots/voice_sample_from_emulator.wav \
   --model "$MODEL_DIR" \
   --expected "Simple book speech fixture This simple book is a clear test of imported speech Just Read It should restore the document and read every sentence aloud" \
   --min-coverage 0.60
-rm -rf "$MODEL_DIR" build/screenshots/vosk-model.zip
+rm -rf "$MODEL_DIR" "$VENV_DIR" build/screenshots/vosk-model.zip
 
 test -s build/screenshots/01_txt_import_editor.png
 test -s build/screenshots/02_player_playback.png
@@ -183,6 +174,8 @@ test -s build/screenshots/long_markdown_playback_sample_from_emulator.wav
 python3 ../tools/validate_pngs.py \
   build/screenshots/01_txt_import_editor.png \
   build/screenshots/02_player_playback.png
-if [ -s build/screenshots/background-android-home.png ]; then
-  python3 ../tools/validate_pngs.py build/screenshots/background-android-home.png
+if [ -s build/screenshots/background-ios-home.png ]; then
+  python3 ../tools/validate_pngs.py build/screenshots/background-ios-home.png
 fi
+
+xcrun simctl io "$DEVICE_ID" screenshot build/screenshots/final-ios-simulator.png || true

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:just_read_it/main.dart' as app;
+import 'package:just_read_it/services/audio_handler.dart';
 import 'package:just_read_it/ui/player_screen.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -18,8 +19,14 @@ void main() {
       (tester) async {
     final tempDir = await getTemporaryDirectory();
     final longMarkdownFile = File('${tempDir.path}/long_markdown_fixture.md');
+    const fixtureRepeats = int.fromEnvironment(
+      'JRI_LONG_DOC_FIXTURE_REPEATS',
+      defaultValue: 1,
+    );
+    final fixtureText =
+        await rootBundle.loadString('test/fixtures/long_markdown_fixture.md');
     await longMarkdownFile.writeAsString(
-      await rootBundle.loadString('test/fixtures/long_markdown_fixture.md'),
+      List.filled(fixtureRepeats.clamp(1, 4), fixtureText).join('\n\n'),
       flush: true,
     );
 
@@ -34,9 +41,13 @@ void main() {
     expect(importedText, contains('See you at the end'));
 
     expect(find.byKey(const Key('voice.current')), findsOneWidget);
+    const expectedVoiceLabel = String.fromEnvironment(
+      'JRI_EXPECTED_LONG_DOC_VOICE_LABEL',
+      defaultValue: 'Android Default Voice',
+    );
     expect(
       tester.widget<Text>(find.byKey(const Key('voice.current'))).data,
-      'Android Default Voice',
+      expectedVoiceLabel,
     );
     // Keep the long-document guard focused on import/playback proof. The
     // speed slider has its own widget coverage; dragging it here can be flaky
@@ -66,10 +77,14 @@ void main() {
       },
       timeout: const Duration(seconds: 30),
     );
+    const wavTimeoutMinutes = int.fromEnvironment(
+      'JRI_LONG_DOC_WAV_TIMEOUT_MINUTES',
+      defaultValue: 2,
+    );
     await _pumpUntil(
       tester,
       () => wavFile.existsSync() && wavFile.lengthSync() > 100000,
-      timeout: const Duration(minutes: 2),
+      timeout: Duration(minutes: wavTimeoutMinutes.clamp(2, 12)),
     );
     final playbackStartMs = launchTimer.elapsedMilliseconds;
     debugPrint('JRI_LONG_DOC_PLAYBACK_STARTED_AFTER_MS=$playbackStartMs');
@@ -106,6 +121,13 @@ void main() {
     debugPrint(
       'JRI_LONG_DOC_MEDIA_CONTROLS_VALIDATED word=${resumedProgress.current} total=${resumedProgress.total}',
     );
+
+    const validateBackgroundMedia = bool.fromEnvironment(
+      'JRI_VALIDATE_BACKGROUND_MEDIA',
+    );
+    if (validateBackgroundMedia) {
+      await _validateBackgroundPlaybackAndControls(tester);
+    }
 
     final bytes = await wavFile.readAsBytes();
     _validateWav(bytes);
@@ -184,6 +206,92 @@ class _PlayerProgress {
 
   final int current;
   final int total;
+}
+
+Future<void> _validateBackgroundPlaybackAndControls(
+  WidgetTester tester,
+) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(PlayerScreen)),
+  );
+  final audioHandler = await container.read(audioHandlerProvider);
+  await _pumpUntil(
+    tester,
+    () =>
+        audioHandler.isPlaying &&
+        audioHandler.position >= const Duration(milliseconds: 500),
+    timeout: const Duration(seconds: 20),
+  );
+
+  final start = audioHandler.position;
+  debugPrint(
+    'JRI_BACKGROUND_VALIDATION_READY positionMs=${start.inMilliseconds}',
+  );
+
+  const backgroundHoldSeconds = int.fromEnvironment(
+    'JRI_BACKGROUND_MEDIA_HOLD_SECONDS',
+    defaultValue: 8,
+  );
+  await tester.runAsync(
+    () => Future<void>.delayed(
+      Duration(seconds: backgroundHoldSeconds.clamp(8, 120)),
+    ),
+  );
+  const externalBackgroundControls = bool.fromEnvironment(
+    'JRI_BACKGROUND_MEDIA_EXTERNAL_CONTROLS',
+    defaultValue: true,
+  );
+  await tester.pump(const Duration(milliseconds: 500));
+  final afterBackground = audioHandler.position;
+  if (externalBackgroundControls) {
+    // The shell harness validates platform media-session state and drives
+    // media controls while this test is backgrounded, then writes the required
+    // validation markers into the shared flutter-run.log. Avoid asserting here
+    // because the harness intentionally pauses/resumes playback during the
+    // hold window.
+    return;
+  }
+
+  expect(audioHandler.isPlaying, isTrue);
+  expect(
+    afterBackground,
+    greaterThan(start + const Duration(seconds: 2)),
+  );
+  debugPrint(
+    'JRI_BACKGROUND_PLAYBACK_CONTINUED '
+    'fromMs=${start.inMilliseconds} toMs=${afterBackground.inMilliseconds}',
+  );
+
+  debugPrint('JRI_BACKGROUND_REMOTE_PAUSE_READY');
+  await audioHandler.pause();
+  await _pumpUntil(
+    tester,
+    () => !audioHandler.isPlaying,
+    timeout: const Duration(seconds: 30),
+  );
+  final paused = audioHandler.position;
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(seconds: 2)),
+  );
+  await tester.pump(const Duration(milliseconds: 500));
+  final stillPaused = audioHandler.position;
+  expect(stillPaused, lessThanOrEqualTo(paused + const Duration(seconds: 1)));
+  debugPrint(
+    'JRI_BACKGROUND_REMOTE_PAUSE_VALIDATED positionMs=${paused.inMilliseconds}',
+  );
+
+  debugPrint('JRI_BACKGROUND_REMOTE_PLAY_READY');
+  await audioHandler.play();
+  await _pumpUntil(
+    tester,
+    () => audioHandler.isPlaying,
+    timeout: const Duration(seconds: 30),
+  );
+  final resumed = audioHandler.position;
+  debugPrint(
+    'JRI_BACKGROUND_REMOTE_PLAY_VALIDATED '
+    'pausedMs=${paused.inMilliseconds} resumedMs=${resumed.inMilliseconds}',
+  );
 }
 
 String _expectedNeedle(Matcher matcher) {
