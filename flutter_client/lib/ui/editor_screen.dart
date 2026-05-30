@@ -94,9 +94,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Just Read It'),
-      ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         child: _buildLaunchButton(context),
