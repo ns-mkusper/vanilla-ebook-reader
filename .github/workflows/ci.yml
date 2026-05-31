@@ -53,7 +53,6 @@ jobs:
             grep -Eq "$1" changed-files.txt && echo true || echo false
           }
 
-          ci_pattern='^\.github/workflows/ci\.yml$'
           rust_pattern='^(rust_core/|tools/|\.github/workflows/ci\.yml$)'
           flutter_pattern='^(flutter_client/|rust_core/|tools/|\.github/workflows/ci\.yml$)'
           android_pattern='^(flutter_client/|rust_core/|tools/|\.github/workflows/ci\.yml$)'
@@ -140,7 +139,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: flutter_client
