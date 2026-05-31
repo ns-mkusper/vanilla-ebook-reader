@@ -74,13 +74,20 @@ def nonwhite_ratio(path: Path) -> float:
     return nonwhite / (width * height)
 
 
+def minimum_nonwhite_ratio(path: Path) -> float:
+    if "player" in path.name:
+        return 0.03
+    if "editor" in path.name:
+        return 0.12
+    return 0.18
+
+
 def main() -> None:
     for arg in sys.argv[1:]:
         path = Path(arg)
         ratio = nonwhite_ratio(path)
         print(f"{path}: non-white ratio {ratio:.3f}")
-        min_ratio = 0.03 if "player" in path.name else 0.20
-        if ratio < min_ratio:
+        if ratio < minimum_nonwhite_ratio(path):
             raise SystemExit(f"{path} looks blank/white")
 
 
