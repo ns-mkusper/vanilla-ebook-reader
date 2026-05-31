@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_read_it/main.dart';
 import 'package:just_read_it/services/document_picker.dart';
 import 'package:just_read_it/services/document_repository.dart';
+import 'package:just_read_it/services/tts_preferences_repository.dart';
 import 'package:just_read_it/services/tts_service.dart';
 
 void main() {
@@ -34,6 +35,9 @@ void main() {
     const geminiOutput =
         'AI draft: summarize this chapter, then read it aloud with focus.';
     final pasteTimer = Stopwatch()..start();
+    expect(find.byKey(const Key('playback.speed')), findsNothing);
+    expect(find.byKey(const Key('voice.pitch')), findsNothing);
+
     await tester.enterText(find.byKey(const Key('editor.text')), geminiOutput);
     await tester.pump();
     pasteTimer.stop();
@@ -55,6 +59,8 @@ void main() {
     expect(speech.lastText, geminiOutput);
     expect(find.text('Streaming Playback'), findsOneWidget);
     expect(find.byKey(const Key('player.seekbar')), findsOneWidget);
+    expect(find.byKey(const Key('playback.speed')), findsOneWidget);
+    expect(find.byKey(const Key('voice.pitch')), findsOneWidget);
     expect(find.byKey(const Key('player.highlight.rich_text')), findsOneWidget);
 
     await tester.pageBack();
@@ -83,6 +89,38 @@ void main() {
 
     expect(speech.lastText, 'Voice check text.');
     expect(find.text('Streaming Playback'), findsOneWidget);
+  });
+
+  testWidgets('playback controls use dropdowns on the player screen',
+      (tester) async {
+    await _pumpApp(tester, tempDir, speech);
+    expect(find.byKey(const Key('playback.speed')), findsNothing);
+    expect(find.byKey(const Key('voice.pitch')), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const Key('editor.text')),
+      'Preference dropdown check.',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Read Aloud'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    expect(find.text('Streaming Playback'), findsOneWidget);
+    expect(find.byKey(const Key('playback.speed')), findsOneWidget);
+    expect(find.byKey(const Key('voice.pitch')), findsOneWidget);
+    expect(find.byType(Slider), findsNothing);
+
+    await _selectDropdownValue(tester, const Key('playback.speed'), '1.50×');
+    await _selectDropdownValue(tester, const Key('voice.pitch'), '1.20×');
+
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(TtsApp)));
+    expect(container.read(ttsConfigProvider).rate, 1.5);
+    expect(container.read(ttsConfigProvider).pitch, 1.2);
   });
 
   testWidgets('imports picked markdown bytes from file browser without a path',
@@ -123,6 +161,17 @@ void main() {
   });
 }
 
+Future<void> _selectDropdownValue(
+  WidgetTester tester,
+  Key dropdownKey,
+  String label,
+) async {
+  await tester.tap(find.byKey(dropdownKey));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
 void _setSurface(WidgetTester tester, Size logicalSize) {
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = logicalSize;
@@ -143,6 +192,9 @@ Future<void> _pumpApp(
         documentDirectoryProvider.overrideWith((ref) async => tempDir),
         documentRepositoryProvider.overrideWithValue(
           repository ?? DocumentRepository(directory: tempDir),
+        ),
+        ttsPreferencesRepositoryProvider.overrideWithValue(
+          TtsPreferencesRepository(directory: tempDir),
         ),
         ttsServiceProvider.overrideWithValue(speech),
         documentPickerProvider.overrideWithValue(

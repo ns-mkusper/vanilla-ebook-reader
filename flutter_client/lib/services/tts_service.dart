@@ -14,10 +14,14 @@ import '../services/model_repository.dart';
 import '../services/text_analysis.dart';
 import 'audio_handler.dart';
 import 'bridge_service.dart';
+import 'tts_preferences_repository.dart';
 
 final ttsConfigProvider =
     StateNotifierProvider<TtsConfigNotifier, TtsConfig>((ref) {
-  return TtsConfigNotifier();
+  final repository = ref.watch(ttsPreferencesRepositoryProvider);
+  final notifier = TtsConfigNotifier(repository);
+  unawaited(notifier.loadPreferences());
+  return notifier;
 });
 
 final currentWordIndexProvider = StateProvider<int>((ref) => 0);
@@ -54,7 +58,7 @@ class TtsConfig {
 }
 
 class TtsConfigNotifier extends StateNotifier<TtsConfig> {
-  TtsConfigNotifier()
+  TtsConfigNotifier(this._preferencesRepository)
       : super(
           TtsConfig(
             voice: () {
@@ -70,8 +74,21 @@ class TtsConfigNotifier extends StateNotifier<TtsConfig> {
           ),
         );
 
+  final TtsPreferencesRepository _preferencesRepository;
+  Map<String, VoicePlaybackPreference> _preferences = const {};
+  var _hasLocalChanges = false;
+  Future<void> _pendingPreferenceSave = Future<void>.value();
+
+  Future<void> loadPreferences() async {
+    final loaded = await _preferencesRepository.loadPreferences();
+    if (!mounted) return;
+    _preferences = _hasLocalChanges ? {...loaded, ..._preferences} : loaded;
+    if (_hasLocalChanges) return;
+    state = _configForVoice(state.voice);
+  }
+
   void selectVoice(VoiceSelection selection) {
-    state = state.copyWith(voice: selection);
+    state = _configForVoice(selection);
   }
 
   void hydrateVoice(VoiceSelection selection) {
@@ -79,11 +96,43 @@ class TtsConfigNotifier extends StateNotifier<TtsConfig> {
   }
 
   void updateRate(double value) {
-    state = state.copyWith(rate: value);
+    _hasLocalChanges = true;
+    final clamped = value.clamp(0.5, 3.0).toDouble();
+    state = state.copyWith(rate: clamped);
+    _saveCurrentVoicePreference();
   }
 
   void updatePitch(double value) {
-    state = state.copyWith(pitch: value);
+    _hasLocalChanges = true;
+    final clamped = value.clamp(0.7, 1.4).toDouble();
+    state = state.copyWith(pitch: clamped);
+    _saveCurrentVoicePreference();
+  }
+
+  TtsConfig _configForVoice(VoiceSelection selection) {
+    final preference =
+        _preferences[selection.id] ?? const VoicePlaybackPreference();
+    return TtsConfig(
+      voice: selection,
+      rate: preference.rate,
+      pitch: preference.pitch,
+    );
+  }
+
+  void _saveCurrentVoicePreference() {
+    final preference = VoicePlaybackPreference(
+      rate: state.rate,
+      pitch: state.pitch,
+    );
+    _preferences = {
+      ..._preferences,
+      state.voice.id: preference,
+    };
+    final snapshot = Map<String, VoicePlaybackPreference>.from(_preferences);
+    _pendingPreferenceSave = _pendingPreferenceSave.then(
+      (_) => _preferencesRepository.savePreferences(snapshot),
+    );
+    unawaited(_pendingPreferenceSave);
   }
 }
 
@@ -119,14 +168,16 @@ class TtsService implements SpeechService {
 
     var voice = await repo.ensureSelectionReady(config.voice);
     notifier.hydrateVoice(voice);
+    final playbackConfig = _ref.read(ttsConfigProvider);
 
     switch (voice.backend) {
       case TtsEngineBackend.androidSystem:
-        await _speakWithPlatformTts(text, voice, config, stopSignal);
+        await _speakWithPlatformTts(text, voice, playbackConfig, stopSignal);
       case TtsEngineBackend.fliteClassic:
-        await _speakWithChunkedRustFlite(text, voice, config, stopSignal);
+        await _speakWithChunkedRustFlite(
+            text, voice, playbackConfig, stopSignal);
       case TtsEngineBackend.piper:
-        await _speakWithRustEngine(text, voice, config, stopSignal);
+        await _speakWithRustEngine(text, voice, playbackConfig, stopSignal);
     }
   }
 

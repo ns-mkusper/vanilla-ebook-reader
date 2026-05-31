@@ -2,7 +2,7 @@
 
 **Just Read It** is a Flutter + Rust read-aloud app for importing long-form text, editing it locally, and playing it back with synchronized word highlighting and native media controls.
 
-The project is currently focused on Android. It ships a production-style mobile UI, persistent document storage, native file import, real synthesized audio playback, background/media controls, and adjustable speech settings.
+The project is cross-platform for Android and iOS. It ships a production-style mobile UI, persistent document storage, native file import, real synthesized audio playback, background/media controls, and per-voice adjustable speech settings.
 
 <p align="center">
   <img src="docs/assets/android-editor-import.png" alt="Just Read It editor showing imported text and reading controls" width="320" />
@@ -61,14 +61,14 @@ Or use the project helper when appropriate:
 
 ## iOS build
 
-The iOS app links the Rust Flite bridge as a static library from an Xcode build phase. On macOS with Xcode installed, the Flutter build invokes `flutter_client/tool/ios_build_rust_core.sh` automatically:
+The iOS app links the Rust Flite bridge as a static library from an Xcode build phase. Current iOS support is implemented and validated in CI for simulator parity, including screenshots, synthesized WAV/STT checks, and background media behavior. On macOS with Xcode installed, the Flutter build invokes `flutter_client/tool/ios_build_rust_core.sh` automatically:
 
 ```bash
 cd flutter_client
 flutter build ios --simulator --debug
 ```
 
-For a signed development build on a physical iPhone, open `flutter_client/ios/Runner.xcworkspace` in Xcode, configure your bundle identifier/development team, and run the `Runner` scheme on the device.
+For a signed development build on a physical iPhone, open `flutter_client/ios/Runner.xcworkspace` in Xcode, configure your bundle identifier/development team, and run the `Runner` scheme on the device. iOS remains in development/alpha status rather than App Store-ready release status.
 
 ## Android build
 
