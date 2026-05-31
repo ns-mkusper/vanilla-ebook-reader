@@ -26,6 +26,18 @@ Further technical notes:
 - [Release workflow](docs/releases.md)
 - [Roadmap](docs/roadmap.md)
 
+## Import support
+
+Supported extensions:
+
+- `.txt`
+- `.text`
+- `.md`
+- `.markdown`
+- `.epub`
+
+EPUB import extracts readable XHTML/HTML content from the archive and strips markup into plain text for editing and playback.
+
 ## Build prerequisites
 
 - Flutter stable with Android SDK/NDK configured for Android builds.
@@ -93,18 +105,6 @@ The APK will be written to:
 ```text
 flutter_client/build/app/outputs/flutter-apk/app-debug.apk
 ```
-
-## Import support
-
-Supported extensions:
-
-- `.txt`
-- `.text`
-- `.md`
-- `.markdown`
-- `.epub`
-
-EPUB import extracts readable XHTML/HTML content from the archive and strips markup into plain text for editing and playback.
 
 ## License
 
