@@ -1,8 +1,8 @@
 # Just Read It
 
-**Just Read It** is a Flutter + Rust read-aloud app for importing long-form text, editing it locally, and playing it back with synchronized word highlighting and native media controls.
+**Just Read It** is a Flutter + Rust read-aloud app for turning long-form text into a hands-free listening experience with synchronized word highlighting and native media controls.
 
-The project is cross-platform for Android and iOS. It ships a production-style mobile UI, persistent document storage, native file import, real synthesized audio playback, background/media controls, and per-voice adjustable speech settings.
+The project focuses on passive, phone-based TTS workflows: import text, start playback, and keep listening while walking, commuting, cooking, or otherwise using the phone hands-free. It is cross-platform for Android and iOS and ships persistent document storage, native file import, real synthesized audio playback, background/media controls, and per-voice adjustable speech settings.
 
 <p align="center">
   <img src="docs/assets/android-editor-import.png" alt="Just Read It editor showing imported text and reading controls" width="320" />
@@ -36,7 +36,7 @@ Supported extensions:
 - `.markdown`
 - `.epub`
 
-EPUB import extracts readable XHTML/HTML content from the archive and strips markup into plain text for editing and playback.
+EPUB import extracts readable XHTML/HTML content from the archive and strips markup into plain text for playback.
 
 ## Build prerequisites
 
