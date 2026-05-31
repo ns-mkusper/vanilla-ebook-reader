@@ -3,6 +3,9 @@ name: CI
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   pull_request:
 
 env:
@@ -10,7 +13,61 @@ env:
   SLINT_NO_QT: "1"
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      flutter: ${{ steps.filter.outputs.flutter }}
+      android: ${{ steps.filter.outputs.android }}
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Detect changed areas
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            head="${{ github.event.pull_request.head.sha }}"
+            if [[ "${{ github.event.action }}" == "synchronize" && -n "${{ github.event.before }}" ]]; then
+              base="${{ github.event.before }}"
+            else
+              git fetch origin "${{ github.base_ref }}" --depth=1
+              base="$(git merge-base "$head" "origin/${{ github.base_ref }}")"
+            fi
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+            if [[ "$base" =~ ^0+$ ]]; then
+              base="$(git rev-list --max-parents=0 "$head")"
+            fi
+          fi
+
+          git diff --name-only "$base" "$head" | tee changed-files.txt
+
+          changed() {
+            grep -Eq "$1" changed-files.txt && echo true || echo false
+          }
+
+          rust_pattern='^(rust_core/|tools/|\.github/workflows/ci\.yml$)'
+          flutter_pattern='^(flutter_client/|rust_core/|tools/|\.github/workflows/ci\.yml$)'
+          android_pattern='^(flutter_client/|rust_core/|tools/|\.github/workflows/ci\.yml$)'
+          ios_pattern='^(flutter_client/|rust_core/|tools/|\.github/workflows/ci\.yml$)'
+
+          {
+            echo "rust=$(changed "$rust_pattern")"
+            echo "flutter=$(changed "$flutter_pattern")"
+            echo "android=$(changed "$android_pattern")"
+            echo "ios=$(changed "$ios_pattern")"
+          } >> "$GITHUB_OUTPUT"
+
   rust-lint-and-test:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,6 +87,8 @@ jobs:
         run: cargo check --workspace --all-targets
 
   flutter-ux-tests:
+    needs: changes
+    if: needs.changes.outputs.flutter == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,18 +102,12 @@ jobs:
         run: flutter pub get
       - name: Flutter analyze
         run: flutter analyze
-      - name: Widget smoke test
-        run: flutter test test/widget_test.dart
-      - name: Document import and persistence tests
-        run: flutter test test/document_repository_test.dart
-      - name: Desktop/mobile UX flow tests
-        run: flutter test test/ux_flow_test.dart
-      - name: Long document TTS chunking tests
-        run: flutter test test/tts_chunking_test.dart
-      - name: Text pipeline performance guardrail
-        run: flutter test test/performance/text_pipeline_perf_test.dart
+      - name: Flutter tests
+        run: flutter test
 
   android-rust-check:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -67,8 +120,9 @@ jobs:
       - name: Cargo check Android Rust core
         run: cargo check --target aarch64-linux-android --no-default-features
 
-
   ios-rust-check:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-latest
     defaults:
       run:
@@ -82,8 +136,10 @@ jobs:
         run: cargo check --target aarch64-apple-ios-sim --no-default-features --features bridge,flite
 
   ios-simulator-screenshots:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: flutter_client
@@ -115,6 +171,8 @@ jobs:
           if-no-files-found: error
 
   android-emulator-screenshots:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:

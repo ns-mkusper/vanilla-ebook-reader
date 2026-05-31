@@ -1,8 +1,8 @@
 # Just Read It
 
-**Just Read It** is a Flutter + Rust read-aloud app for importing long-form text, editing it locally, and playing it back with synchronized word highlighting and native media controls.
+**Just Read It** is a Flutter + Rust read-aloud app for turning long-form text into a hands-free listening experience with synchronized word highlighting and native media controls.
 
-The project is currently focused on Android. It ships a production-style mobile UI, persistent document storage, native file import, real synthesized audio playback, background/media controls, and adjustable speech settings.
+The project focuses on making phone-based TTS useful in a passive, hands-free way: listening to long chat messages, AI responses, articles, book chapters, or other text while walking, commuting, cooking, or otherwise away from the screen. It is cross-platform for Android and iOS and prioritizes a high-quality playback and usability experience, including background control, responsive UI, fast startup, and session persistence.
 
 <p align="center">
   <img src="docs/assets/android-editor-import.png" alt="Just Read It editor showing imported text and reading controls" width="320" />
@@ -25,6 +25,18 @@ Further technical notes:
 - [Validation guide](docs/validation.md)
 - [Release workflow](docs/releases.md)
 - [Roadmap](docs/roadmap.md)
+
+## Import support
+
+Supported extensions:
+
+- `.txt`
+- `.text`
+- `.md`
+- `.markdown`
+- `.epub`
+
+EPUB import extracts readable XHTML/HTML content from the archive and strips markup into plain text for playback.
 
 ## Build prerequisites
 
@@ -61,14 +73,14 @@ Or use the project helper when appropriate:
 
 ## iOS build
 
-The iOS app links the Rust Flite bridge as a static library from an Xcode build phase. On macOS with Xcode installed, the Flutter build invokes `flutter_client/tool/ios_build_rust_core.sh` automatically:
+The iOS app links the Rust Flite bridge as a static library from an Xcode build phase. Current iOS support is implemented and validated in CI for simulator parity, including screenshots, synthesized WAV/STT checks, and background media behavior. On macOS with Xcode installed, the Flutter build invokes `flutter_client/tool/ios_build_rust_core.sh` automatically:
 
 ```bash
 cd flutter_client
 flutter build ios --simulator --debug
 ```
 
-For a signed development build on a physical iPhone, open `flutter_client/ios/Runner.xcworkspace` in Xcode, configure your bundle identifier/development team, and run the `Runner` scheme on the device.
+For a signed development build on a physical iPhone, open `flutter_client/ios/Runner.xcworkspace` in Xcode, configure your bundle identifier/development team, and run the `Runner` scheme on the device. iOS remains in development/alpha status rather than App Store-ready release status.
 
 ## Android build
 
@@ -93,18 +105,6 @@ The APK will be written to:
 ```text
 flutter_client/build/app/outputs/flutter-apk/app-debug.apk
 ```
-
-## Import support
-
-Supported extensions:
-
-- `.txt`
-- `.text`
-- `.md`
-- `.markdown`
-- `.epub`
-
-EPUB import extracts readable XHTML/HTML content from the archive and strips markup into plain text for editing and playback.
 
 ## License
 

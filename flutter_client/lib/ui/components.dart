@@ -90,52 +90,120 @@ class _VoicePresetSheet extends ConsumerWidget {
   }
 }
 
-class SpeedSlider extends ConsumerWidget {
-  const SpeedSlider({super.key});
+class PlaybackPreferenceControls extends StatelessWidget {
+  const PlaybackPreferenceControls({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(ttsConfigProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    return const Row(
       children: [
-        const Text('Playback Speed'),
-        Slider(
-          key: const Key('playback.speed'),
-          value: config.rate,
-          min: 0.5,
-          max: 3.0,
-          divisions: 25,
-          label: config.rate.toStringAsFixed(2),
-          onChanged: (value) =>
-              ref.read(ttsConfigProvider.notifier).updateRate(value),
-        ),
+        Expanded(child: SpeedDropdown()),
+        SizedBox(width: 12),
+        Expanded(child: PitchDropdown()),
       ],
     );
   }
 }
 
-class PitchSlider extends ConsumerWidget {
-  const PitchSlider({super.key});
+class SpeedDropdown extends ConsumerWidget {
+  const SpeedDropdown({super.key});
+
+  static const _options = <double>[
+    0.5,
+    0.75,
+    1.0,
+    1.25,
+    1.5,
+    1.75,
+    2.0,
+    2.5,
+    3.0,
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(ttsConfigProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Voice Pitch'),
-        Slider(
-          key: const Key('voice.pitch'),
-          value: config.pitch,
-          min: 0.7,
-          max: 1.4,
-          divisions: 14,
-          label: config.pitch.toStringAsFixed(2),
-          onChanged: (value) =>
-              ref.read(ttsConfigProvider.notifier).updatePitch(value),
+    return InputDecorator(
+      decoration: const InputDecoration(
+        labelText: 'Speed',
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<double>(
+          key: const Key('playback.speed'),
+          value: _nearestOption(config.rate, _options),
+          isExpanded: true,
+          items: [
+            for (final option in _options)
+              DropdownMenuItem<double>(
+                value: option,
+                child: Text(_formatMultiplier(option)),
+              ),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            ref.read(ttsConfigProvider.notifier).updateRate(value);
+          },
         ),
-      ],
+      ),
     );
   }
+}
+
+class PitchDropdown extends ConsumerWidget {
+  const PitchDropdown({super.key});
+
+  static const _options = <double>[
+    0.7,
+    0.8,
+    0.9,
+    1.0,
+    1.1,
+    1.2,
+    1.3,
+    1.4,
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(ttsConfigProvider);
+    return InputDecorator(
+      decoration: const InputDecoration(
+        labelText: 'Pitch',
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<double>(
+          key: const Key('voice.pitch'),
+          value: _nearestOption(config.pitch, _options),
+          isExpanded: true,
+          items: [
+            for (final option in _options)
+              DropdownMenuItem<double>(
+                value: option,
+                child: Text(_formatMultiplier(option)),
+              ),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            ref.read(ttsConfigProvider.notifier).updatePitch(value);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+double _nearestOption(double value, List<double> options) {
+  return options.reduce((closest, option) {
+    final closestDistance = (closest - value).abs();
+    final optionDistance = (option - value).abs();
+    return optionDistance < closestDistance ? option : closest;
+  });
+}
+
+String _formatMultiplier(double value) {
+  return '${value.toStringAsFixed(2)}×';
 }

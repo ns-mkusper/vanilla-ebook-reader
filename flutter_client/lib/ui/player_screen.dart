@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/audio_handler.dart';
 import '../services/text_analysis.dart';
 import '../services/tts_service.dart';
+import 'components.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key, required this.text});
@@ -87,6 +88,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               minHeight: 6,
               borderRadius: BorderRadius.circular(999),
             ),
+            const SizedBox(height: 12),
+            const PlaybackPreferenceControls(),
             const SizedBox(height: 12),
             Row(
               children: [
