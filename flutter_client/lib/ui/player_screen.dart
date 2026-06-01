@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,16 +19,23 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
-  var _paused = false;
+  var _isPlaying = true;
+  var _isRestartingForPitch = false;
+  var _hasObservedPlayback = false;
+  StreamSubscription<bool>? _playingSub;
+  StreamSubscription<PlaybackState>? _playbackStateSub;
 
   @override
   void initState() {
     super.initState();
     Future.microtask(() async {
       try {
+        final audioHandler = await ref.read(audioHandlerProvider);
+        _attachPlaybackState(audioHandler);
         await ref.read(ttsServiceProvider).speak(widget.text);
       } catch (err) {
         if (!mounted) return;
+        setState(() => _isPlaying = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Playback failed: $err')),
         );
@@ -33,9 +43,48 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    unawaited(_playingSub?.cancel());
+    unawaited(_playbackStateSub?.cancel());
+    super.dispose();
+  }
+
+  void _attachPlaybackState(TtsAudioHandler audioHandler) {
+    _playingSub ??= audioHandler.playingStream().listen((playing) {
+      if (!mounted) return;
+      if (playing) {
+        _hasObservedPlayback = true;
+      } else if (!_hasObservedPlayback) {
+        return;
+      }
+      setState(() => _isPlaying = playing);
+    });
+    _playbackStateSub ??= audioHandler.playbackState.listen((state) {
+      if (!mounted) return;
+      if (state.playing) {
+        _hasObservedPlayback = true;
+      }
+      final isStoppedState =
+          state.processingState == AudioProcessingState.completed ||
+              state.processingState == AudioProcessingState.idle;
+      if (!_hasObservedPlayback && !state.playing) {
+        return;
+      }
+      if (isStoppedState) {
+        setState(() => _isPlaying = false);
+      } else {
+        setState(() => _isPlaying = state.playing);
+      }
+    });
+  }
+
   Future<void> _togglePause() async {
-    final shouldResume = _paused;
-    setState(() => _paused = !shouldResume);
+    final shouldResume = !_isPlaying;
+    if (shouldResume) {
+      _hasObservedPlayback = true;
+    }
+    setState(() => _isPlaying = shouldResume);
     ref.read(ttsStatusProvider.notifier).state =
         shouldResume ? 'Playing' : 'Paused';
     final audioHandler = await ref.read(audioHandlerProvider);
@@ -51,13 +100,55 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     final audioHandler = await ref.read(audioHandlerProvider);
     await audioHandler.stop();
     if (!mounted) return;
-    setState(() => _paused = false);
+    _hasObservedPlayback = false;
+    setState(() => _isPlaying = false);
     ref.read(currentWordIndexProvider.notifier).state = 0;
     ref.read(ttsStatusProvider.notifier).state = 'Stopped';
   }
 
+  Future<void> _restartPlaybackForPitchChange() async {
+    if (_isRestartingForPitch || !_isPlaying) return;
+    _isRestartingForPitch = true;
+    try {
+      ref.read(ttsStopSignalProvider.notifier).state++;
+      final audioHandler = await ref.read(audioHandlerProvider);
+      await audioHandler.stop();
+      if (!mounted) return;
+      _hasObservedPlayback = true;
+      setState(() => _isPlaying = true);
+      ref.read(currentWordIndexProvider.notifier).state = 0;
+      await ref.read(ttsServiceProvider).speak(widget.text);
+    } catch (err) {
+      if (!mounted) return;
+      setState(() => _isPlaying = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Playback failed: $err')),
+      );
+    } finally {
+      _isRestartingForPitch = false;
+    }
+  }
+
+  Future<void> _applyPlaybackConfigChange(
+    TtsConfig? previous,
+    TtsConfig next,
+  ) async {
+    if (previous == null) return;
+    final audioHandler = await ref.read(audioHandlerProvider);
+    if (previous.rate != next.rate) {
+      await audioHandler.setPlaybackSpeed(next.rate);
+    }
+    if (previous.pitch != next.pitch) {
+      await _restartPlaybackForPitchChange();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<TtsConfig>(ttsConfigProvider, (previous, next) {
+      unawaited(_applyPlaybackConfigChange(previous, next));
+    });
+
     final wordIndex = ref.watch(currentWordIndexProvider);
     final boundaries = ref.watch(wordBoundariesProvider);
     final effectiveBoundaries =
@@ -97,8 +188,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                   child: OutlinedButton.icon(
                     key: const Key('player.pause'),
                     onPressed: _togglePause,
-                    icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
-                    label: Text(_paused ? 'Play' : 'Pause'),
+                    icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                    label: Text(_isPlaying ? 'Pause' : 'Play'),
                   ),
                 ),
                 const SizedBox(width: 12),

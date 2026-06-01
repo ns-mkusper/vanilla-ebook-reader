@@ -44,7 +44,8 @@ abstract class AudioPlayerController {
 }
 
 class JustAudioPlayerController implements AudioPlayerController {
-  JustAudioPlayerController([AudioPlayer? player]) : _player = player ?? AudioPlayer();
+  JustAudioPlayerController([AudioPlayer? player])
+      : _player = player ?? AudioPlayer();
 
   final AudioPlayer _player;
 
@@ -91,7 +92,8 @@ class JustAudioPlayerController implements AudioPlayerController {
   Future<void> setSpeed(double speed) => _player.setSpeed(speed);
 
   @override
-  Future<void> setAudioSource(AudioSource source) => _player.setAudioSource(source);
+  Future<void> setAudioSource(AudioSource source) =>
+      _player.setAudioSource(source);
 
   @override
   Future<void> seek(Duration position, {int? index}) =>
@@ -264,6 +266,12 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   int? get currentIndex => _player.currentIndex;
   Stream<bool> playingStream() => _player.playingStream;
   bool get isPlaying => _player.playing;
+
+  Future<void> setPlaybackSpeed(double speed) async {
+    final clamped = speed.clamp(0.5, 3.0).toDouble();
+    await _player.setSpeed(clamped);
+    playbackState.add(playbackState.value.copyWith(speed: clamped));
+  }
 
   Future<void> togglePlayPause() async {
     if (_player.playing) {
