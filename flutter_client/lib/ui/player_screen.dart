@@ -98,7 +98,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     key: const Key('player.pause'),
                     onPressed: _togglePause,
                     icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
-                    label: Text(_paused ? 'Resume' : 'Pause'),
+                    label: Text(_paused ? 'Play' : 'Pause'),
                   ),
                 ),
                 const SizedBox(width: 12),

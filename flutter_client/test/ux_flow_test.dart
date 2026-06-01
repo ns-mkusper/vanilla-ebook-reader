@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -5,7 +6,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:just_read_it/main.dart';
+import 'package:just_read_it/services/audio_handler.dart';
 import 'package:just_read_it/services/document_picker.dart';
 import 'package:just_read_it/services/document_repository.dart';
 import 'package:just_read_it/services/tts_preferences_repository.dart';
@@ -89,6 +92,34 @@ void main() {
 
     expect(speech.lastText, 'Voice check text.');
     expect(find.text('Streaming Playback'), findsOneWidget);
+  });
+
+  testWidgets('pause button shows play after it is pressed', (tester) async {
+    await _pumpApp(
+      tester,
+      tempDir,
+      speech,
+      audioHandler: TtsAudioHandler(player: _FakeAudioPlayerController()),
+    );
+    await tester.enterText(
+      find.byKey(const Key('editor.text')),
+      'Pause button label check.',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Read Aloud'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    expect(find.text('Pause'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('player.pause')));
+    await tester.pump();
+
+    expect(find.text('Play'), findsOneWidget);
+    expect(find.text('Pause'), findsNothing);
   });
 
   testWidgets('playback controls use dropdowns on the player screen',
@@ -185,6 +216,7 @@ Future<void> _pumpApp(
   _RecordingSpeechService speech, {
   DocumentPicker? picker,
   DocumentRepository? repository,
+  TtsAudioHandler? audioHandler,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -197,6 +229,8 @@ Future<void> _pumpApp(
           TtsPreferencesRepository(directory: tempDir),
         ),
         ttsServiceProvider.overrideWithValue(speech),
+        if (audioHandler != null)
+          audioHandlerProvider.overrideWithValue(Future.value(audioHandler)),
         documentPickerProvider.overrideWithValue(
           picker ?? _FakeDocumentPicker(null),
         ),
@@ -205,6 +239,56 @@ Future<void> _pumpApp(
     ),
   );
   await tester.pump(const Duration(milliseconds: 100));
+}
+
+class _FakeAudioPlayerController implements AudioPlayerController {
+  @override
+  Stream<PlaybackEvent> get playbackEventStream => const Stream<PlaybackEvent>.empty();
+
+  @override
+  Stream<Duration> get positionStream => const Stream<Duration>.empty();
+
+  @override
+  Stream<int?> get currentIndexStream => const Stream<int?>.empty();
+
+  @override
+  Stream<bool> get playingStream => const Stream<bool>.empty();
+
+  @override
+  Duration get position => Duration.zero;
+
+  @override
+  Duration get bufferedPosition => Duration.zero;
+
+  @override
+  int? get currentIndex => 0;
+
+  @override
+  bool get playing => false;
+
+  @override
+  double get speed => 1.0;
+
+  @override
+  ProcessingState get processingState => ProcessingState.ready;
+
+  @override
+  Future<void> play() async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<void> setSpeed(double speed) async {}
+
+  @override
+  Future<void> setAudioSource(AudioSource source) async {}
+
+  @override
+  Future<void> seek(Duration position, {int? index}) async {}
 }
 
 class _RecordingSpeechService implements SpeechService {

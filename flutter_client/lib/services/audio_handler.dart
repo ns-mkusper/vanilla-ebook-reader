@@ -22,12 +22,89 @@ final audioHandlerProvider = Provider<Future<TtsAudioHandler>>((ref) async {
   );
 });
 
+@visibleForTesting
+abstract class AudioPlayerController {
+  Stream<PlaybackEvent> get playbackEventStream;
+  Stream<Duration> get positionStream;
+  Stream<int?> get currentIndexStream;
+  Stream<bool> get playingStream;
+  Duration get position;
+  Duration get bufferedPosition;
+  int? get currentIndex;
+  bool get playing;
+  double get speed;
+  ProcessingState get processingState;
+
+  Future<void> play();
+  Future<void> pause();
+  Future<void> stop();
+  Future<void> setSpeed(double speed);
+  Future<void> setAudioSource(AudioSource source);
+  Future<void> seek(Duration position, {int? index});
+}
+
+class JustAudioPlayerController implements AudioPlayerController {
+  JustAudioPlayerController([AudioPlayer? player]) : _player = player ?? AudioPlayer();
+
+  final AudioPlayer _player;
+
+  @override
+  Stream<PlaybackEvent> get playbackEventStream => _player.playbackEventStream;
+
+  @override
+  Stream<Duration> get positionStream => _player.positionStream;
+
+  @override
+  Stream<int?> get currentIndexStream => _player.currentIndexStream;
+
+  @override
+  Stream<bool> get playingStream => _player.playingStream;
+
+  @override
+  Duration get position => _player.position;
+
+  @override
+  Duration get bufferedPosition => _player.bufferedPosition;
+
+  @override
+  int? get currentIndex => _player.currentIndex;
+
+  @override
+  bool get playing => _player.playing;
+
+  @override
+  double get speed => _player.speed;
+
+  @override
+  ProcessingState get processingState => _player.processingState;
+
+  @override
+  Future<void> play() => _player.play();
+
+  @override
+  Future<void> pause() => _player.pause();
+
+  @override
+  Future<void> stop() => _player.stop();
+
+  @override
+  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
+
+  @override
+  Future<void> setAudioSource(AudioSource source) => _player.setAudioSource(source);
+
+  @override
+  Future<void> seek(Duration position, {int? index}) =>
+      _player.seek(position, index: index);
+}
+
 class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
-  TtsAudioHandler() {
+  TtsAudioHandler({@visibleForTesting AudioPlayerController? player})
+      : _player = player ?? JustAudioPlayerController() {
     _player.playbackEventStream.listen(_broadcastState);
   }
 
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayerController _player;
   MediaItem? _currentItem;
   ConcatenatingAudioSource? _activePlaylist;
 
@@ -213,9 +290,10 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> stop() async {
-    _activePlaylist = null;
+    final seekIndex = _activePlaylist == null ? null : 0;
     await _player.pause();
-    await _player.seek(Duration.zero);
+    await _player.seek(Duration.zero, index: seekIndex);
+    _activePlaylist = null;
     await _player.stop();
     debugPrint('JRI_PLAYBACK_STOPPED');
     playbackState.add(playbackState.value.copyWith(
