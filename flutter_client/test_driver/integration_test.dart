@@ -19,9 +19,21 @@ Future<void> main() async {
     responseDataCallback: (data) async {
       final directory = Directory('build/screenshots');
       await directory.create(recursive: true);
+      final response = File('${directory.path}/integration_response_data.json');
+      final sanitized =
+          Map<String, dynamic>.from(data ?? const <String, dynamic>{})
+            ..remove('playbackWavBase64');
+      await response.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(sanitized),
+        flush: true,
+      );
+
       final base64Wav = data?['playbackWavBase64'];
+      if (base64Wav == null) {
+        return;
+      }
       if (base64Wav is! String || base64Wav.isEmpty) {
-        throw StateError('Missing playbackWavBase64 from integration test.');
+        throw StateError('Invalid playbackWavBase64 from integration test.');
       }
       final rawName = data?['playbackWavName'];
       final wavName = rawName is String && rawName.isNotEmpty
@@ -33,14 +45,6 @@ Future<void> main() async {
       }
       final wav = File('${directory.path}/$wavName');
       await wav.writeAsBytes(base64Decode(base64Wav), flush: true);
-      final response = File('${directory.path}/integration_response_data.json');
-      final sanitized =
-          Map<String, dynamic>.from(data ?? const <String, dynamic>{})
-            ..remove('playbackWavBase64');
-      await response.writeAsString(
-        const JsonEncoder.withIndent('  ').convert(sanitized),
-        flush: true,
-      );
     },
   );
 }
