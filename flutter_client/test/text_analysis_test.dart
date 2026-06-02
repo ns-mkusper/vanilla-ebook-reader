@@ -2,6 +2,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_read_it/services/text_analysis.dart';
 
 void main() {
+  test('computeWordBoundaries ignores non-spoken symbol tokens', () {
+    const text = 'Intro *** — ∙ © Outro';
+
+    final boundaries = computeWordBoundaries(text);
+    final words = [
+      for (final boundary in boundaries)
+        text.substring(boundary.start, boundary.end),
+    ];
+
+    expect(words, const ['Intro', 'Outro']);
+    expect(boundaries.map((boundary) => boundary.index), const [0, 1]);
+  });
+
+  test('computeWordBoundaries trims markdown asterisks around words', () {
+    const text = '**Bold** *italic* plain ***';
+
+    final boundaries = computeWordBoundaries(text);
+    final words = [
+      for (final boundary in boundaries)
+        text.substring(boundary.start, boundary.end),
+    ];
+
+    expect(words, const ['Bold', 'italic', 'plain']);
+  });
   test('wordIndexForPosition uses cue windows with binary-search boundaries',
       () {
     final cues = buildWordCues(4, const Duration(seconds: 4));
