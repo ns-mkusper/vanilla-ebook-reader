@@ -314,6 +314,18 @@ class TtsAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> seek(Duration position) => _player.seek(position);
 
+  Future<void> seekToWordTarget(Duration position, {int? chunkIndex}) {
+    final playlist = _activePlaylist;
+    if (playlist == null) {
+      return _player.seek(position);
+    }
+    final seekIndex = chunkIndex ?? _player.currentIndex ?? 0;
+    if (seekIndex < 0 || seekIndex >= playlist.children.length) {
+      throw StateError('Audio for the selected word is still buffering.');
+    }
+    return _player.seek(position, index: seekIndex);
+  }
+
   @override
   Future<void> fastForward() =>
       _player.seek(_player.position + const Duration(seconds: 15));

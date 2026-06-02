@@ -75,6 +75,29 @@ void main() {
     expect(restoredField.controller!.text, geminiOutput);
   });
 
+  testWidgets('tapping a rendered word requests seek-by-word', (tester) async {
+    _setSurface(tester, const Size(390, 844));
+    await _pumpApp(tester, tempDir, speech);
+    await tester.enterText(
+      find.byKey(const Key('editor.text')),
+      'Seek target word.',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Read Aloud'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    final richText = find.byKey(const Key('player.highlight.rich_text'));
+    expect(richText, findsOneWidget);
+    await tester.tapAt(tester.getTopLeft(richText) + const Offset(8, 10));
+    await tester.pump();
+
+    expect(speech.lastSeekWordIndex, 0);
+  });
+
   testWidgets('uses Motorola Male (Flite) as the default voice label',
       (tester) async {
     await _pumpApp(tester, tempDir, speech);
@@ -437,11 +460,17 @@ class _FakeAudioPlayerController implements AudioPlayerController {
 class _RecordingSpeechService implements SpeechService {
   String? lastText;
   var calls = 0;
+  int? lastSeekWordIndex;
 
   @override
   Future<void> speak(String rawText) async {
     calls += 1;
     lastText = rawText;
+  }
+
+  @override
+  Future<void> seekToWord(int wordIndex) async {
+    lastSeekWordIndex = wordIndex;
   }
 }
 

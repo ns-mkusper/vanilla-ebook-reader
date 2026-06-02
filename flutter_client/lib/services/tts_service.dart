@@ -16,8 +16,9 @@ import 'audio_handler.dart';
 import 'bridge_service.dart';
 import 'tts_preferences_repository.dart';
 
-final ttsConfigProvider =
-    StateNotifierProvider<TtsConfigNotifier, TtsConfig>((ref) {
+final ttsConfigProvider = StateNotifierProvider<TtsConfigNotifier, TtsConfig>((
+  ref,
+) {
   final repository = ref.watch(ttsPreferencesRepositoryProvider);
   final notifier = TtsConfigNotifier(repository);
   unawaited(notifier.loadPreferences());
@@ -25,30 +26,27 @@ final ttsConfigProvider =
 });
 
 final currentWordIndexProvider = StateProvider<int>((ref) => 0);
-final wordBoundariesProvider =
-    StateProvider<List<TextWordBoundary>>((ref) => const []);
+final wordBoundariesProvider = StateProvider<List<TextWordBoundary>>(
+  (ref) => const [],
+);
 final wordCuesProvider = StateProvider<List<WordCue>>((ref) => const []);
 final wordChunkOffsetsProvider = StateProvider<List<int>>((ref) => const []);
-final wordChunkDurationsProvider =
-    StateProvider<List<Duration>>((ref) => const []);
+final wordChunkDurationsProvider = StateProvider<List<Duration>>(
+  (ref) => const [],
+);
+final wordChunkWordCountsProvider = StateProvider<List<int>>((ref) => const []);
+final wordTimelineFallbackDurationProvider =
+    StateProvider<Duration>((ref) => Duration.zero);
 final ttsStatusProvider = StateProvider<String>((ref) => 'Idle');
 final ttsStopSignalProvider = StateProvider<int>((ref) => 0);
 
 class TtsConfig {
-  const TtsConfig({
-    required this.voice,
-    this.rate = 1.0,
-    this.pitch = 1.0,
-  });
+  const TtsConfig({required this.voice, this.rate = 1.0, this.pitch = 1.0});
 
   final VoiceSelection voice;
   final double rate;
   final double pitch;
-  TtsConfig copyWith({
-    VoiceSelection? voice,
-    double? rate,
-    double? pitch,
-  }) {
+  TtsConfig copyWith({VoiceSelection? voice, double? rate, double? pitch}) {
     return TtsConfig(
       voice: voice ?? this.voice,
       rate: rate ?? this.rate,
@@ -62,8 +60,9 @@ class TtsConfigNotifier extends StateNotifier<TtsConfig> {
       : super(
           TtsConfig(
             voice: () {
-              final preset =
-                  voiceModelPresets.firstWhere((p) => p.id == defaultVoiceId);
+              final preset = voiceModelPresets.firstWhere(
+                (p) => p.id == defaultVoiceId,
+              );
               return VoiceSelection(
                 id: preset.id,
                 displayName: preset.label,
@@ -124,10 +123,7 @@ class TtsConfigNotifier extends StateNotifier<TtsConfig> {
       rate: state.rate,
       pitch: state.pitch,
     );
-    _preferences = {
-      ..._preferences,
-      state.voice.id: preference,
-    };
+    _preferences = {..._preferences, state.voice.id: preference};
     final snapshot = Map<String, VoicePlaybackPreference>.from(_preferences);
     _pendingPreferenceSave = _pendingPreferenceSave.then(
       (_) => _preferencesRepository.savePreferences(snapshot),
@@ -142,6 +138,7 @@ final ttsServiceProvider = Provider<SpeechService>((ref) {
 
 abstract class SpeechService {
   Future<void> speak(String rawText);
+  Future<void> seekToWord(int wordIndex);
 }
 
 class TtsService implements SpeechService {
@@ -151,6 +148,25 @@ class TtsService implements SpeechService {
 
   final Ref _ref;
   StreamSubscription<Duration>? _positionSub;
+
+  @override
+  Future<void> seekToWord(int wordIndex) async {
+    final cues = _ref.read(wordCuesProvider);
+    final target = seekTargetForWord(wordIndex, cues);
+    if (target == null) {
+      return;
+    }
+    final boundaries = _ref.read(wordBoundariesProvider);
+    final clampedWordIndex = boundaries.isEmpty
+        ? wordIndex.clamp(0, cues.length - 1).toInt()
+        : wordIndex.clamp(0, boundaries.length - 1).toInt();
+    _ref.read(currentWordIndexProvider.notifier).state = clampedWordIndex;
+    final audioHandler = await _ref.read(audioHandlerProvider);
+    await audioHandler.seekToWordTarget(
+      target.position,
+      chunkIndex: target.chunkIndex,
+    );
+  }
 
   @override
   Future<void> speak(String rawText) async {
@@ -175,7 +191,11 @@ class TtsService implements SpeechService {
         await _speakWithPlatformTts(text, voice, playbackConfig, stopSignal);
       case TtsEngineBackend.fliteClassic:
         await _speakWithChunkedRustFlite(
-            text, voice, playbackConfig, stopSignal);
+          text,
+          voice,
+          playbackConfig,
+          stopSignal,
+        );
       case TtsEngineBackend.piper:
         await _speakWithRustEngine(text, voice, playbackConfig, stopSignal);
     }
@@ -189,7 +209,8 @@ class TtsService implements SpeechService {
   ) async {
     if (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS) {
       throw UnsupportedError(
-          'System TTS file synthesis is not available here.');
+        'System TTS file synthesis is not available here.',
+      );
     }
 
     final cacheDir = await getTemporaryDirectory();
@@ -220,10 +241,7 @@ class TtsService implements SpeechService {
     // visual highlighting proves the imported long document made it to playback.
     final lowLatencyStartup = fullChunks.length > 1;
     final startupChunks = lowLatencyStartup
-        ? splitPlatformTtsText(
-            text,
-            maxChars: _platformStartupChunkMaxChars,
-          )
+        ? splitPlatformTtsText(text, maxChars: _platformStartupChunkMaxChars)
         : fullChunks;
     final chunks = lowLatencyStartup && startupChunks.isNotEmpty
         ? <String>[startupChunks.first]
@@ -245,7 +263,8 @@ class TtsService implements SpeechService {
         final chunkFile = index == 0
             ? generated
             : File(
-                '${cacheDir.path}/just_read_it_tts_chunk_${DateTime.now().microsecondsSinceEpoch}_$index.wav');
+                '${cacheDir.path}/just_read_it_tts_chunk_${DateTime.now().microsecondsSinceEpoch}_$index.wav',
+              );
         final result = await flutterTts.synthesizeToFile(
           chunks[index],
           chunkFile.path,
@@ -283,14 +302,16 @@ class TtsService implements SpeechService {
             'JRI_DISABLE_BACKGROUND_TTS_QUEUE',
           );
           if (!disableBackgroundQueue) {
-            unawaited(_synthesizeAndAppendPlatformChunks(
-              flutterTts,
-              startupChunks.skip(1).toList(),
-              cacheDir,
-              stopSignal: stopSignal,
-              audioHandler: await _ref.read(audioHandlerProvider),
-              totalChunks: advertisedChunkCount,
-            ));
+            unawaited(
+              _synthesizeAndAppendPlatformChunks(
+                flutterTts,
+                startupChunks.skip(1).toList(),
+                cacheDir,
+                stopSignal: stopSignal,
+                audioHandler: await _ref.read(audioHandlerProvider),
+                totalChunks: advertisedChunkCount,
+              ),
+            );
           }
           return;
         }
@@ -355,6 +376,7 @@ class TtsService implements SpeechService {
       audioHandler,
     );
     _ref.read(wordChunkDurationsProvider.notifier).state = [duration];
+    _refreshChunkedWordCues();
     return duration;
   }
 
@@ -416,6 +438,7 @@ class TtsService implements SpeechService {
         _ref.read(wordChunkDurationsProvider),
       )..add(chunkDuration);
       _ref.read(wordChunkDurationsProvider.notifier).state = durations;
+      _refreshChunkedWordCues();
       await audioHandler.appendFileToQueue(chunkFile);
       debugPrint(
         'JRI_TTS_BUFFERED_CHUNK=$chunkNumber/$totalChunks '
@@ -467,7 +490,8 @@ class TtsService implements SpeechService {
       firstChunk.pcmBytes,
       firstChunk.sampleRate,
       File(
-          '${cacheDir.path}/just_read_it_flite_start_${DateTime.now().microsecondsSinceEpoch}.wav'),
+        '${cacheDir.path}/just_read_it_flite_start_${DateTime.now().microsecondsSinceEpoch}.wav',
+      ),
     );
     final firstDuration = await _wavDuration(firstFile);
     final totalDuration = _estimateFullDuration(
@@ -491,18 +515,21 @@ class TtsService implements SpeechService {
         'Playing chunk 1 of ${chunks.length}';
     _attachChunkedTextTimeline(text, chunks, totalDuration, audioHandler);
     _ref.read(wordChunkDurationsProvider.notifier).state = [firstDuration];
+    _refreshChunkedWordCues();
     debugPrint(
       'JRI_TTS_FIRST_AUDIO_READY_MS=${startupTimer.elapsedMilliseconds} '
       'chars=${chunks.first.length} totalChars=${text.length}',
     );
-    unawaited(_synthesizeAndAppendRustChunks(
-      chunks.skip(1).toList(),
-      cacheDir,
-      stopSignal: stopSignal,
-      audioHandler: audioHandler,
-      voice: voice,
-      totalChunks: chunks.length,
-    ));
+    unawaited(
+      _synthesizeAndAppendRustChunks(
+        chunks.skip(1).toList(),
+        cacheDir,
+        stopSignal: stopSignal,
+        audioHandler: audioHandler,
+        voice: voice,
+        totalChunks: chunks.length,
+      ),
+    );
   }
 
   Future<void> _speakWithRustEngine(
@@ -522,15 +549,15 @@ class TtsService implements SpeechService {
             sampleRate: null,
           ),
         ),
-      TtsEngineBackend.androidSystem =>
-        throw StateError('Android system TTS should not use Rust engine'),
+      TtsEngineBackend.androidSystem => throw StateError(
+          'Android system TTS should not use Rust engine',
+        ),
     };
 
     final request = bridge.EngineRequest(backend: backend, gainDb: null);
-    final stream = bridge.streamAudio(text: text, request: request).timeout(
-          const Duration(seconds: 2),
-          onTimeout: (sink) => sink.close(),
-        );
+    final stream = bridge
+        .streamAudio(text: text, request: request)
+        .timeout(const Duration(seconds: 2), onTimeout: (sink) => sink.close());
 
     final buffer = BytesBuilder();
     int? sampleRate;
@@ -596,8 +623,10 @@ class TtsService implements SpeechService {
     final buffer = BytesBuilder();
     int? sampleRate;
     var totalSamples = 0;
-    await for (final chunk
-        in bridge.streamAudio(text: text, request: request)) {
+    await for (final chunk in bridge.streamAudio(
+      text: text,
+      request: request,
+    )) {
       final pcmView = chunk.pcm.buffer.asUint8List(
         chunk.pcm.offsetInBytes,
         chunk.pcm.lengthInBytes,
@@ -613,14 +642,19 @@ class TtsService implements SpeechService {
   }
 
   Future<File> _writePcmWav(
-      Uint8List pcmBytes, int sampleRate, File output) async {
+    Uint8List pcmBytes,
+    int sampleRate,
+    File output,
+  ) async {
     final bytes = BytesBuilder(copy: false)
-      ..add(_wavHeader(
-        dataLength: pcmBytes.length,
-        sampleRate: sampleRate,
-        channels: 1,
-        bitsPerSample: 16,
-      ))
+      ..add(
+        _wavHeader(
+          dataLength: pcmBytes.length,
+          sampleRate: sampleRate,
+          channels: 1,
+          bitsPerSample: 16,
+        ),
+      )
       ..add(pcmBytes);
     await output.writeAsBytes(bytes.takeBytes(), flush: true);
     return output;
@@ -648,17 +682,19 @@ class TtsService implements SpeechService {
         audio.pcmBytes,
         audio.sampleRate,
         File(
-            '${cacheDir.path}/just_read_it_flite_queue_${DateTime.now().microsecondsSinceEpoch}_$index.wav'),
+          '${cacheDir.path}/just_read_it_flite_queue_${DateTime.now().microsecondsSinceEpoch}_$index.wav',
+        ),
       );
       if (_ref.read(ttsStopSignalProvider) != stopSignal) {
         if (await file.exists()) await file.delete();
         return;
       }
       final duration = await _wavDuration(file);
-      final durations =
-          List<Duration>.from(_ref.read(wordChunkDurationsProvider))
-            ..add(duration);
+      final durations = List<Duration>.from(
+        _ref.read(wordChunkDurationsProvider),
+      )..add(duration);
       _ref.read(wordChunkDurationsProvider.notifier).state = durations;
+      _refreshChunkedWordCues();
       await audioHandler.appendFileToQueue(file);
       debugPrint(
         'JRI_TTS_BUFFERED_CHUNK=$chunkNumber/$totalChunks '
@@ -674,9 +710,7 @@ class TtsService implements SpeechService {
       final byteRate = data.getUint32(28, Endian.little);
       final dataLength = data.getUint32(40, Endian.little);
       if (byteRate > 0) {
-        return Duration(
-          milliseconds: (dataLength / byteRate * 1000).round(),
-        );
+        return Duration(milliseconds: (dataLength / byteRate * 1000).round());
       }
     }
     return const Duration(seconds: 1);
@@ -690,6 +724,9 @@ class TtsService implements SpeechService {
     final boundaries = computeWordBoundaries(text);
     _ref.read(wordBoundariesProvider.notifier).state = boundaries;
     _ref.read(wordChunkOffsetsProvider.notifier).state = const [0];
+    _ref.read(wordChunkWordCountsProvider.notifier).state =
+        boundaries.isEmpty ? const [] : [boundaries.length];
+    _ref.read(wordTimelineFallbackDurationProvider.notifier).state = duration;
     _ref.read(wordChunkDurationsProvider.notifier).state = [duration];
     final cues = buildWordCues(boundaries.length, duration);
     _ref.read(wordCuesProvider.notifier).state = cues;
@@ -717,8 +754,15 @@ class TtsService implements SpeechService {
     }
     _ref.read(wordChunkOffsetsProvider.notifier).state =
         offsets.isEmpty ? const [0] : offsets;
+    _ref.read(wordChunkWordCountsProvider.notifier).state = chunkWordCounts;
+    _ref.read(wordTimelineFallbackDurationProvider.notifier).state =
+        totalDuration;
     _ref.read(wordChunkDurationsProvider.notifier).state = const [];
-    final cues = buildWordCues(boundaries.length, totalDuration);
+    final cues = buildChunkedWordCues(
+      chunkWordCounts: chunkWordCounts,
+      chunkDurations: const [],
+      fallbackTotalDuration: totalDuration,
+    );
     _ref.read(wordCuesProvider.notifier).state = cues;
     _ref.read(currentWordIndexProvider.notifier).state = 0;
     _attachChunkedTimeline(
@@ -754,44 +798,40 @@ class TtsService implements SpeechService {
       final currentIndex = (handler.currentIndex ?? 0)
           .clamp(0, chunkWordCounts.length - 1)
           .toInt();
-      final chunkStartWord = _ref.read(wordChunkOffsetsProvider)[currentIndex];
-      final chunkWordCount = chunkWordCounts[currentIndex];
-      final nextChunkStart = currentIndex + 1 < chunkWordCounts.length
-          ? _ref.read(wordChunkOffsetsProvider)[currentIndex + 1]
-          : boundaries.length;
-      final effectiveChunkWords = min(
-        chunkWordCount,
-        max(1, nextChunkStart - chunkStartWord),
+      var cues = _ref.read(wordCuesProvider);
+      if (cues.isEmpty) {
+        cues = buildChunkedWordCues(
+          chunkWordCounts: chunkWordCounts,
+          chunkDurations: _ref.read(wordChunkDurationsProvider),
+          fallbackTotalDuration: fallbackTotalDuration,
+        );
+        _ref.read(wordCuesProvider.notifier).state = cues;
+      }
+      final index = wordIndexForChunkPosition(
+        chunkIndex: currentIndex,
+        position: position,
+        cues: cues,
       );
-      final durations = _ref.read(wordChunkDurationsProvider);
-      final chunkDuration = currentIndex < durations.length
-          ? durations[currentIndex]
-          : _estimateChunkDuration(
-              currentIndex: currentIndex,
-              chunkWordCounts: chunkWordCounts,
-              fallbackTotalDuration: fallbackTotalDuration,
-            );
-      final cues = buildWordCues(effectiveChunkWords, chunkDuration);
-      final localIndex = wordIndexForPosition(position, cues);
-      _ref.read(currentWordIndexProvider.notifier).state =
-          min(chunkStartWord + localIndex, boundaries.length - 1);
+      _ref.read(currentWordIndexProvider.notifier).state = min(
+        index,
+        boundaries.length - 1,
+      );
     });
   }
 
-  Duration _estimateChunkDuration({
-    required int currentIndex,
-    required List<int> chunkWordCounts,
-    required Duration fallbackTotalDuration,
-  }) {
-    final totalWords =
-        chunkWordCounts.fold<int>(0, (sum, count) => sum + count);
-    if (totalWords <= 0 || fallbackTotalDuration <= Duration.zero) {
-      return const Duration(seconds: 15);
+  void _refreshChunkedWordCues() {
+    final chunkWordCounts = _ref.read(wordChunkWordCountsProvider);
+    if (chunkWordCounts.isEmpty) {
+      return;
     }
-    final estimatedMs = fallbackTotalDuration.inMilliseconds *
-        chunkWordCounts[currentIndex] /
-        totalWords;
-    return Duration(milliseconds: estimatedMs.round().clamp(1000, 600000));
+    final durations = _ref.read(wordChunkDurationsProvider);
+    final fallbackTotalDuration =
+        _ref.read(wordTimelineFallbackDurationProvider);
+    _ref.read(wordCuesProvider.notifier).state = buildChunkedWordCues(
+      chunkWordCounts: chunkWordCounts,
+      chunkDurations: durations,
+      fallbackTotalDuration: fallbackTotalDuration,
+    );
   }
 }
 
@@ -932,12 +972,14 @@ Future<File> stitchWavFiles(List<File> inputs, File output) async {
   }
 
   final out = BytesBuilder(copy: false);
-  out.add(_wavHeader(
-    dataLength: totalDataLength,
-    sampleRate: sampleRate!,
-    channels: channels!,
-    bitsPerSample: bitsPerSample!,
-  ));
+  out.add(
+    _wavHeader(
+      dataLength: totalDataLength,
+      sampleRate: sampleRate!,
+      channels: channels!,
+      bitsPerSample: bitsPerSample!,
+    ),
+  );
   for (final part in pcmParts) {
     out.add(part);
   }
