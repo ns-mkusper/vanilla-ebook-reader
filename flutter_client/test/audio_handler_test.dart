@@ -5,7 +5,38 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_read_it/services/audio_handler.dart';
 
 void main() {
-  test('stop rewinds queued playback to the first chunk before stopping', () async {
+  test('seekToWordTarget seeks to queued chunk index', () async {
+    final player = _FakeAudioPlayerController();
+    final handler = TtsAudioHandler(player: player);
+    final tempDir = await Directory.systemTemp.createTemp('jri_audio_seek_');
+    addTearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+    final first = File('${tempDir.path}/first.wav')..writeAsBytesSync([0]);
+    final second = File('${tempDir.path}/second.wav')..writeAsBytesSync([0]);
+
+    await handler.playFileQueue(
+      first,
+      duration: const Duration(seconds: 1),
+      totalDuration: const Duration(seconds: 2),
+    );
+    await handler.appendFileToQueue(second);
+    player.seekCalls.clear();
+
+    await handler.seekToWordTarget(
+      const Duration(milliseconds: 750),
+      chunkIndex: 1,
+    );
+
+    expect(player.seekCalls, hasLength(1));
+    expect(player.seekCalls.single.position, const Duration(milliseconds: 750));
+    expect(player.seekCalls.single.index, 1);
+  });
+
+  test('stop rewinds queued playback to the first chunk before stopping',
+      () async {
     final player = _FakeAudioPlayerController();
     final handler = TtsAudioHandler(player: player);
     final tempDir = await Directory.systemTemp.createTemp('jri_audio_handler_');
@@ -46,7 +77,8 @@ class _FakeAudioPlayerController implements AudioPlayerController {
   var processingStateValue = ProcessingState.ready;
 
   @override
-  Stream<PlaybackEvent> get playbackEventStream => const Stream<PlaybackEvent>.empty();
+  Stream<PlaybackEvent> get playbackEventStream =>
+      const Stream<PlaybackEvent>.empty();
 
   @override
   Stream<Duration> get positionStream => const Stream<Duration>.empty();

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/audio_handler.dart';
@@ -36,9 +37,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       } catch (err) {
         if (!mounted) return;
         setState(() => _isPlaying = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Playback failed: $err')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Playback failed: $err')));
       }
     });
   }
@@ -95,6 +96,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     }
   }
 
+  Future<void> _seekToWord(int wordIndex) async {
+    try {
+      await ref.read(ttsServiceProvider).seekToWord(wordIndex);
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Seek failed: $err')));
+    }
+  }
+
   Future<void> _stopPlayback() async {
     ref.read(ttsStopSignalProvider.notifier).state++;
     _hasObservedPlayback = false;
@@ -107,9 +119,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       await audioHandler.stop();
     } catch (err) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Playback stop failed: $err')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Playback stop failed: $err')));
     }
   }
 
@@ -128,9 +140,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     } catch (err) {
       if (!mounted) return;
       setState(() => _isPlaying = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Playback failed: $err')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Playback failed: $err')));
     } finally {
       _isRestartingForPitch = false;
     }
@@ -162,7 +174,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         boundaries.isEmpty ? computeWordBoundaries(widget.text) : boundaries;
     final status = ref.watch(ttsStatusProvider);
     final totalWords = effectiveBoundaries.length;
-    final currentWord = totalWords == 0 ? 0 : wordIndex + 1;
+    final activeWordIndex =
+        totalWords == 0 ? 0 : wordIndex.clamp(0, totalWords - 1).toInt();
+    final currentWord = totalWords == 0 ? 0 : activeWordIndex + 1;
+    final currentWordText = totalWords == 0
+        ? ''
+        : widget.text.substring(
+            effectiveBoundaries[activeWordIndex].start,
+            effectiveBoundaries[activeWordIndex].end,
+          );
     final progressValue = totalWords == 0
         ? 0.0
         : (currentWord / totalWords).clamp(0.0, 1.0).toDouble();
@@ -223,13 +243,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               key: const Key('player.status'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            if (currentWordText.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Reading: $currentWordText',
+                key: const Key('player.current_word'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 12),
             Expanded(
               child: _HighlightedText(
                 key: const Key('player.highlight.text'),
                 text: widget.text,
-                activeIndex: wordIndex,
+                activeIndex: activeWordIndex,
                 boundaries: effectiveBoundaries,
+                onWordTap: _seekToWord,
               ),
             ),
           ],
@@ -239,34 +268,80 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 }
 
-class _HighlightedText extends StatelessWidget {
+class _HighlightedText extends StatefulWidget {
   const _HighlightedText({
     super.key,
     required this.text,
     required this.activeIndex,
     required this.boundaries,
+    required this.onWordTap,
   });
 
   final String text;
   final int activeIndex;
   final List<TextWordBoundary> boundaries;
+  final ValueChanged<int> onWordTap;
+
+  @override
+  State<_HighlightedText> createState() => _HighlightedTextState();
+}
+
+class _HighlightedTextState extends State<_HighlightedText> {
+  void _handleTapUp(TapUpDetails details) {
+    final paragraph = _findRenderParagraph(context.findRenderObject());
+    if (paragraph == null) return;
+    final position = paragraph.getPositionForOffset(
+      paragraph.globalToLocal(details.globalPosition),
+    );
+    final wordIndex = _wordIndexAtTextOffset(position.offset);
+    if (wordIndex == null) return;
+    widget.onWordTap(wordIndex);
+  }
+
+  int? _wordIndexAtTextOffset(int offset) {
+    var low = 0;
+    var high = widget.boundaries.length - 1;
+    while (low <= high) {
+      final mid = low + ((high - low) >> 1);
+      final boundary = widget.boundaries[mid];
+      if (offset < boundary.start) {
+        high = mid - 1;
+      } else if (offset >= boundary.end) {
+        low = mid + 1;
+      } else {
+        return boundary.index;
+      }
+    }
+    return null;
+  }
+
+  RenderParagraph? _findRenderParagraph(RenderObject? object) {
+    if (object is RenderParagraph) return object;
+    RenderParagraph? result;
+    object?.visitChildren((child) {
+      result ??= _findRenderParagraph(child);
+    });
+    return result;
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (boundaries.isEmpty) {
+    if (widget.boundaries.isEmpty) {
       return SingleChildScrollView(
-        child: Text(text, style: Theme.of(context).textTheme.bodyLarge),
+        child: Text(widget.text, style: Theme.of(context).textTheme.bodyLarge),
       );
     }
     final spans = <TextSpan>[];
     var cursor = 0;
     final theme = Theme.of(context);
-    for (final boundary in boundaries) {
+    for (final boundary in widget.boundaries) {
       if (boundary.start > cursor) {
-        spans.add(TextSpan(text: text.substring(cursor, boundary.start)));
+        spans.add(
+          TextSpan(text: widget.text.substring(cursor, boundary.start)),
+        );
       }
-      final wordText = text.substring(boundary.start, boundary.end);
-      final isActive = boundary.index == activeIndex;
+      final wordText = widget.text.substring(boundary.start, boundary.end);
+      final isActive = boundary.index == widget.activeIndex;
       spans.add(
         TextSpan(
           text: wordText,
@@ -276,20 +351,27 @@ class _HighlightedText extends StatelessWidget {
                   color: theme.colorScheme.onPrimary,
                   fontWeight: FontWeight.bold,
                 )
-              : null,
+              : TextStyle(color: theme.colorScheme.primary),
         ),
       );
       cursor = boundary.end;
     }
-    if (cursor < text.length) {
-      spans.add(TextSpan(text: text.substring(cursor)));
+    if (cursor < widget.text.length) {
+      spans.add(TextSpan(text: widget.text.substring(cursor)));
     }
     return SingleChildScrollView(
-      child: RichText(
-        key: const Key('player.highlight.rich_text'),
-        text: TextSpan(
-          style: Theme.of(context).textTheme.bodyLarge,
-          children: spans,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: _handleTapUp,
+          child: RichText(
+            key: const Key('player.highlight.rich_text'),
+            text: TextSpan(
+              style: Theme.of(context).textTheme.bodyLarge,
+              children: spans,
+            ),
+          ),
         ),
       ),
     );
