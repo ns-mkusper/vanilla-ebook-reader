@@ -104,7 +104,7 @@ void main() {
       'JRI_LONG_DOC_PLAYBACK_PROOF_MS=${launchTimer.elapsedMilliseconds}',
     );
     await tester.tap(find.byKey(const Key('player.pause')));
-    await _pumpUntilFound(tester, find.text('Resume'),
+    await _pumpUntilFound(tester, find.text('Play'),
         timeout: const Duration(seconds: 10));
     final pausedProgress = _playerProgress(tester);
     await tester.pump(const Duration(seconds: 2));

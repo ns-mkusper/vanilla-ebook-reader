@@ -122,6 +122,130 @@ void main() {
     expect(find.text('Pause'), findsNothing);
   });
 
+  testWidgets('stop button changes primary playback control back to play',
+      (tester) async {
+    await _pumpApp(
+      tester,
+      tempDir,
+      speech,
+      audioHandler: TtsAudioHandler(player: _FakeAudioPlayerController()),
+    );
+    await tester.enterText(
+      find.byKey(const Key('editor.text')),
+      'Stop button label check.',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Read Aloud'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    expect(find.text('Pause'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('player.stop')));
+    await tester.pump();
+
+    expect(find.text('Play'), findsOneWidget);
+    expect(find.text('Pause'), findsNothing);
+    expect(find.text('Stopped'), findsOneWidget);
+  });
+
+  testWidgets('stop button updates to play before native stop completes',
+      (tester) async {
+    final stopCompleter = Completer<void>();
+    await _pumpApp(
+      tester,
+      tempDir,
+      speech,
+      audioHandler: TtsAudioHandler(
+        player: _FakeAudioPlayerController(stopCompleter: stopCompleter),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('editor.text')),
+      'Fast stop label check.',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Read Aloud'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    expect(find.text('Pause'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('player.stop')));
+    await tester.pump();
+
+    expect(find.text('Play'), findsOneWidget);
+    expect(find.text('Stopped'), findsOneWidget);
+    expect(stopCompleter.isCompleted, isFalse);
+
+    stopCompleter.complete();
+    await tester.pump();
+  });
+
+  testWidgets('changing playback speed updates the active audio player',
+      (tester) async {
+    final player = _FakeAudioPlayerController();
+    await _pumpApp(
+      tester,
+      tempDir,
+      speech,
+      audioHandler: TtsAudioHandler(player: player),
+    );
+    await tester.enterText(
+      find.byKey(const Key('editor.text')),
+      'Live speed change check.',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Read Aloud'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    await _selectDropdownValue(tester, const Key('playback.speed'), '1.50×');
+
+    expect(player.speedChanges, contains(1.5));
+  });
+
+  testWidgets('changing pitch restarts active playback with the same text',
+      (tester) async {
+    await _pumpApp(
+      tester,
+      tempDir,
+      speech,
+      audioHandler: TtsAudioHandler(player: _FakeAudioPlayerController()),
+    );
+    await tester.enterText(
+      find.byKey(const Key('editor.text')),
+      'Live pitch change check.',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Read Aloud'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    expect(speech.calls, 1);
+
+    await _selectDropdownValue(tester, const Key('voice.pitch'), '1.20×');
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    expect(speech.calls, 2);
+    expect(speech.lastText, 'Live pitch change check.');
+  });
+
   testWidgets('playback controls use dropdowns on the player screen',
       (tester) async {
     await _pumpApp(tester, tempDir, speech);
@@ -229,8 +353,12 @@ Future<void> _pumpApp(
           TtsPreferencesRepository(directory: tempDir),
         ),
         ttsServiceProvider.overrideWithValue(speech),
-        if (audioHandler != null)
-          audioHandlerProvider.overrideWithValue(Future.value(audioHandler)),
+        audioHandlerProvider.overrideWithValue(
+          Future.value(
+            audioHandler ??
+                TtsAudioHandler(player: _FakeAudioPlayerController()),
+          ),
+        ),
         documentPickerProvider.overrideWithValue(
           picker ?? _FakeDocumentPicker(null),
         ),
@@ -242,8 +370,14 @@ Future<void> _pumpApp(
 }
 
 class _FakeAudioPlayerController implements AudioPlayerController {
+  _FakeAudioPlayerController({this.stopCompleter});
+
+  final Completer<void>? stopCompleter;
+  final speedChanges = <double>[];
+  var playingValue = true;
   @override
-  Stream<PlaybackEvent> get playbackEventStream => const Stream<PlaybackEvent>.empty();
+  Stream<PlaybackEvent> get playbackEventStream =>
+      const Stream<PlaybackEvent>.empty();
 
   @override
   Stream<Duration> get positionStream => const Stream<Duration>.empty();
@@ -264,25 +398,34 @@ class _FakeAudioPlayerController implements AudioPlayerController {
   int? get currentIndex => 0;
 
   @override
-  bool get playing => false;
+  bool get playing => playingValue;
 
   @override
-  double get speed => 1.0;
+  double get speed => speedChanges.isEmpty ? 1.0 : speedChanges.last;
 
   @override
   ProcessingState get processingState => ProcessingState.ready;
 
   @override
-  Future<void> play() async {}
+  Future<void> play() async {
+    playingValue = true;
+  }
 
   @override
-  Future<void> pause() async {}
+  Future<void> pause() async {
+    playingValue = false;
+  }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    playingValue = false;
+    await stopCompleter?.future;
+  }
 
   @override
-  Future<void> setSpeed(double speed) async {}
+  Future<void> setSpeed(double speed) async {
+    speedChanges.add(speed);
+  }
 
   @override
   Future<void> setAudioSource(AudioSource source) async {}
@@ -293,9 +436,11 @@ class _FakeAudioPlayerController implements AudioPlayerController {
 
 class _RecordingSpeechService implements SpeechService {
   String? lastText;
+  var calls = 0;
 
   @override
   Future<void> speak(String rawText) async {
+    calls += 1;
     lastText = rawText;
   }
 }
