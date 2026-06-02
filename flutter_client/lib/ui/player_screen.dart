@@ -174,7 +174,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         boundaries.isEmpty ? computeWordBoundaries(widget.text) : boundaries;
     final status = ref.watch(ttsStatusProvider);
     final totalWords = effectiveBoundaries.length;
-    final currentWord = totalWords == 0 ? 0 : wordIndex + 1;
+    final activeWordIndex =
+        totalWords == 0 ? 0 : wordIndex.clamp(0, totalWords - 1).toInt();
+    final currentWord = totalWords == 0 ? 0 : activeWordIndex + 1;
+    final currentWordText = totalWords == 0
+        ? ''
+        : widget.text.substring(
+            effectiveBoundaries[activeWordIndex].start,
+            effectiveBoundaries[activeWordIndex].end,
+          );
     final progressValue = totalWords == 0
         ? 0.0
         : (currentWord / totalWords).clamp(0.0, 1.0).toDouble();
@@ -235,12 +243,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               key: const Key('player.status'),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            if (currentWordText.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Reading: $currentWordText',
+                key: const Key('player.current_word'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 12),
             Expanded(
               child: _HighlightedText(
                 key: const Key('player.highlight.text'),
                 text: widget.text,
-                activeIndex: wordIndex,
+                activeIndex: activeWordIndex,
                 boundaries: effectiveBoundaries,
                 onWordTap: _seekToWord,
               ),
