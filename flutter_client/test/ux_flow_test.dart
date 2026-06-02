@@ -152,6 +152,42 @@ void main() {
     expect(find.text('Stopped'), findsOneWidget);
   });
 
+  testWidgets('stop button updates to play before native stop completes',
+      (tester) async {
+    final stopCompleter = Completer<void>();
+    await _pumpApp(
+      tester,
+      tempDir,
+      speech,
+      audioHandler: TtsAudioHandler(
+        player: _FakeAudioPlayerController(stopCompleter: stopCompleter),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('editor.text')),
+      'Fast stop label check.',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Read Aloud'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
+    expect(find.text('Pause'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('player.stop')));
+    await tester.pump();
+
+    expect(find.text('Play'), findsOneWidget);
+    expect(find.text('Stopped'), findsOneWidget);
+    expect(stopCompleter.isCompleted, isFalse);
+
+    stopCompleter.complete();
+    await tester.pump();
+  });
+
   testWidgets('changing playback speed updates the active audio player',
       (tester) async {
     final player = _FakeAudioPlayerController();
@@ -334,6 +370,9 @@ Future<void> _pumpApp(
 }
 
 class _FakeAudioPlayerController implements AudioPlayerController {
+  _FakeAudioPlayerController({this.stopCompleter});
+
+  final Completer<void>? stopCompleter;
   final speedChanges = <double>[];
   var playingValue = true;
   @override
@@ -380,6 +419,7 @@ class _FakeAudioPlayerController implements AudioPlayerController {
   @override
   Future<void> stop() async {
     playingValue = false;
+    await stopCompleter?.future;
   }
 
   @override

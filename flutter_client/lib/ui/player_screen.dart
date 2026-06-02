@@ -97,13 +97,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   Future<void> _stopPlayback() async {
     ref.read(ttsStopSignalProvider.notifier).state++;
-    final audioHandler = await ref.read(audioHandlerProvider);
-    await audioHandler.stop();
-    if (!mounted) return;
     _hasObservedPlayback = false;
     setState(() => _isPlaying = false);
     ref.read(currentWordIndexProvider.notifier).state = 0;
     ref.read(ttsStatusProvider.notifier).state = 'Stopped';
+
+    try {
+      final audioHandler = await ref.read(audioHandlerProvider);
+      await audioHandler.stop();
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Playback stop failed: $err')),
+      );
+    }
   }
 
   Future<void> _restartPlaybackForPitchChange() async {
