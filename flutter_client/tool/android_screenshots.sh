@@ -119,13 +119,13 @@ flutter drive \
   --dart-define=JRI_ENABLE_IMPORT_PATH_DIALOG=true \
   > build/screenshots/flutter-run.log 2>&1
 
+run_long_markdown_drive_with_background_controls
+
 flutter drive \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/word_seek_highlight_test.dart \
   -d emulator-5554 \
   >> build/screenshots/flutter-run.log 2>&1
-
-run_long_markdown_drive_with_background_controls
 
 if ! grep -q "JRI_WORD_SEEK_HIGHLIGHT_VALIDATED" build/screenshots/flutter-run.log; then
   echo "Word tap seek/highlight emulator validation did not complete" >&2
