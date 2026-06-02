@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/audio_handler.dart';
@@ -287,31 +287,45 @@ class _HighlightedText extends StatefulWidget {
 }
 
 class _HighlightedTextState extends State<_HighlightedText> {
-  final _recognizers = <TapGestureRecognizer>[];
-
-  @override
-  void dispose() {
-    _disposeRecognizers();
-    super.dispose();
+  void _handleTapUp(TapUpDetails details) {
+    final paragraph = _findRenderParagraph(context.findRenderObject());
+    if (paragraph == null) return;
+    final position = paragraph.getPositionForOffset(
+      paragraph.globalToLocal(details.globalPosition),
+    );
+    final wordIndex = _wordIndexAtTextOffset(position.offset);
+    if (wordIndex == null) return;
+    widget.onWordTap(wordIndex);
   }
 
-  void _disposeRecognizers() {
-    for (final recognizer in _recognizers) {
-      recognizer.dispose();
+  int? _wordIndexAtTextOffset(int offset) {
+    var low = 0;
+    var high = widget.boundaries.length - 1;
+    while (low <= high) {
+      final mid = low + ((high - low) >> 1);
+      final boundary = widget.boundaries[mid];
+      if (offset < boundary.start) {
+        high = mid - 1;
+      } else if (offset >= boundary.end) {
+        low = mid + 1;
+      } else {
+        return boundary.index;
+      }
     }
-    _recognizers.clear();
+    return null;
   }
 
-  TapGestureRecognizer _recognizerFor(int wordIndex) {
-    final recognizer = TapGestureRecognizer()
-      ..onTap = () => widget.onWordTap(wordIndex);
-    _recognizers.add(recognizer);
-    return recognizer;
+  RenderParagraph? _findRenderParagraph(RenderObject? object) {
+    if (object is RenderParagraph) return object;
+    RenderParagraph? result;
+    object?.visitChildren((child) {
+      result ??= _findRenderParagraph(child);
+    });
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    _disposeRecognizers();
     if (widget.boundaries.isEmpty) {
       return SingleChildScrollView(
         child: Text(widget.text, style: Theme.of(context).textTheme.bodyLarge),
@@ -331,8 +345,6 @@ class _HighlightedTextState extends State<_HighlightedText> {
       spans.add(
         TextSpan(
           text: wordText,
-          recognizer: _recognizerFor(boundary.index),
-          mouseCursor: SystemMouseCursors.click,
           style: isActive
               ? TextStyle(
                   backgroundColor: theme.colorScheme.primary,
@@ -348,11 +360,18 @@ class _HighlightedTextState extends State<_HighlightedText> {
       spans.add(TextSpan(text: widget.text.substring(cursor)));
     }
     return SingleChildScrollView(
-      child: RichText(
-        key: const Key('player.highlight.rich_text'),
-        text: TextSpan(
-          style: Theme.of(context).textTheme.bodyLarge,
-          children: spans,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: _handleTapUp,
+          child: RichText(
+            key: const Key('player.highlight.rich_text'),
+            text: TextSpan(
+              style: Theme.of(context).textTheme.bodyLarge,
+              children: spans,
+            ),
+          ),
         ),
       ),
     );
