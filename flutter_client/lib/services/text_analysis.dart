@@ -59,11 +59,44 @@ List<TextWordBoundary> computeWordBoundaries(String text) {
   final boundaries = <TextWordBoundary>[];
   var index = 0;
   for (final match in matches) {
+    final speechRange = _speechTokenRange(text, match.start, match.end);
+    if (speechRange == null) continue;
     boundaries.add(
-      TextWordBoundary(index: index++, start: match.start, end: match.end),
+      TextWordBoundary(
+        index: index++,
+        start: speechRange.start,
+        end: speechRange.end,
+      ),
     );
   }
   return boundaries;
+}
+
+({int start, int end})? _speechTokenRange(String text, int start, int end) {
+  int? speechStart;
+  int? speechEnd;
+  var offset = start;
+  for (final rune in text.substring(start, end).runes) {
+    final width = rune > 0xffff ? 2 : 1;
+    if (_isSpeechRune(rune)) {
+      speechStart ??= offset;
+      speechEnd = offset + width;
+    }
+    offset += width;
+  }
+
+  return speechStart != null && speechEnd != null
+      ? (start: speechStart, end: speechEnd)
+      : null;
+}
+
+bool _isSpeechRune(int rune) {
+  return (rune >= 0x30 && rune <= 0x39) ||
+      (rune >= 0x41 && rune <= 0x5a) ||
+      (rune >= 0x61 && rune <= 0x7a) ||
+      (rune >= 0xc0 && rune <= 0xd6) ||
+      (rune >= 0xd8 && rune <= 0xf6) ||
+      (rune >= 0xf8 && rune <= 0x2af);
 }
 
 List<WordCue> buildWordCues(int wordCount, Duration totalDuration) {
